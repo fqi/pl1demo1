@@ -1,0 +1,104 @@
+ /* CANFOTO  CLSMVS: CANCEL LAST PERMANENT AND TEMPORARY PHOTO        */
+ /* OWNING SYSTEM  : DSSM <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2003-10-17 MMC  C13232   ORIGINAL                                 */
+ /*********************************************************************/
+ CANFOTO: PROC( COMMON,
+                DSDRPCB_PTR,
+                LICENCE#,
+                CANCEL_DATE)
+                RETURNS ( BIT(1)) REORDER;
+1  /*----------------------------------------------------------------*/
+   /* SUBROUTINE DECLARES
+   /*----------------------------------------------------------------*/
+   DCL 1 COMMON CONNECTED,
+       %INCLUDE COMMON;
+   %INCLUDE DSDRPCB;
+   DCL LICENCE#              FIXED BIN(31),
+       CANCEL_DATE           FIXED DEC(7);
+ %INCLUDE DR1MST;
+ %INCLUDE DR1FOTO;
+ %INCLUDE STDPARM;
+ %INCLUDE MTRHDLI;
+ DCL  ADDR       BUILTIN;
+ DCL LAST_LIDT   FIXED DEC(7,0) INIT(0);                                AR13232
+ DCL RETURN_FLAG BIT(1) INIT('1'B);
+ DCL 1 LAST_PERM_FOTO_SSA,                                              AR13232
+       3  SEGNAME                        CHAR(08) INIT('DR1FOTO'),      AR13232
+       3  CMD_QUAL                       CHAR(01) INIT('*'),            AR13232
+       3  CMD_CODE                       CHAR(03) INIT('--L'),          AR13232
+       3  LP                             CHAR(01) INIT('('),            AR13232
+       3  FILL2                          CHAR (08) INIT ('LICD    '),   AR13232
+       3  RO2                            CHAR (02) INIT (' <'),         AR13232
+       3  LICD                           CHAR (01) INIT ('X'),          AR13232
+       3  RP                             CHAR (01) INIT (')');          AR13232
+ DCL 1 LAST_TEMP_FOTO_SSA,                                              AR13232
+       3  SEGNAME                        CHAR(08) INIT('DR1FOTO'),      AR13232
+       3  CMD_QUAL                       CHAR(01) INIT('*'),            AR13232
+       3  CMD_CODE                       CHAR(03) INIT('--L'),          AR13232
+       3  LP                             CHAR(01) INIT('('),            AR13232
+       3  FILL2                          CHAR (08) INIT ('LICD    '),   AR13232
+       3  RO2                            CHAR (02) INIT ('>='),         AR13232
+       3  LICD                           CHAR (01) INIT ('X'),          AR13232
+       3  RP                             CHAR (01) INIT (')');          AR13232
+   /*-----------------------------------------------------------------*/CRC001
+   /* GET AND HOLD THE LAST PERMANENT FOTO                            */CRC001
+   /*-----------------------------------------------------------------*/CRC001
+   COMMON.VALID_STAT = 'GE';                                            C980246
+   DR1MST_SSAE.LNUM = LICENCE#;
+   CALL MTRHDLI (COMMON,                                                C980246
+                 'CANFOTO: GHU ON DR1FOTO',                             C980246
+                 FIVE,                                                  C980246
+                 GHU,                                                   C980246
+                 DSDRPCB_PTR,                                           C980246
+                 DR1FOTO,                                               C980246
+                 DR1MST_SSAE,                                           C980246
+                 LAST_PERM_FOTO_SSA);
+
+   /*-----------------------------------------------------------------*/CRC001
+   /* IF IT EXISTS, REPLACE IT AFTER SETTING THE CANCEL DATE          */CRC001
+   /*-----------------------------------------------------------------*/CRC001
+   IF DSDRPCB.STATCD = '  '                                             CRC001
+   THEN
+      DO;
+         DR1FOTO.LCDT = CANCEL_DATE;                                    CRC001
+         LAST_LIDT = DR1FOTO.LIDT;                                      AR13232
+         COMMON.VALID_STAT = '  ';                                      C980246
+         CALL MTRHDLI (COMMON,                                          C980246
+                       'CANFOTO: REPL ON DR1FOTO',                      C980246
+                       THREE,                                           C980246
+                       REPL,                                            C980246
+                       DSDRPCB_PTR,                                     C980246
+                       DR1FOTO);
+         COMMON.VALID_STAT = 'GEGB';                                    AR13232
+         CALL MTRHDLI (COMMON,                                          AR13232
+                       'CANFOTO: GHU ON DR1FOTO',                       AR13232
+                       FIVE,                                            AR13232
+                       GHU,                                             AR13232
+                       DSDRPCB_PTR,                                     AR13232
+                       DR1FOTO,                                         AR13232
+                       DR1MST_SSAE,                                     AR13232
+                       LAST_TEMP_FOTO_SSA);                             AR13232
+         IF DSDRPCB.STATCD = '  '                                       AR13232
+         THEN                                                           AR13232
+            IF LAST_LIDT <= DR1FOTO.LIDT                                AR13232
+            THEN                                                        AR13232
+               DO;                                                      AR13232
+                  DR1FOTO.LCDT = CANCEL_DATE;                           AR13232
+                  COMMON.VALID_STAT = '  ';                             AR13232
+                  CALL MTRHDLI (COMMON,                                 AR13232
+                                'CANFOTO: REPL ON DR1FOTO',             AR13232
+                                THREE,                                  AR13232
+                                REPL,                                   AR13232
+                                DSDRPCB_PTR,                            AR13232
+                                DR1FOTO);                               AR13232
+               END;                                                     AR13232
+      END;
+   ELSE
+      RETURN_FLAG = '0'B;
+
+   RETURN(RETURN_FLAG);
+ END CANFOTO;

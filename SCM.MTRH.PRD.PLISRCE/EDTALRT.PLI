@@ -1,0 +1,40 @@
+ /*  EDTALRT - EDIT ALERT INDICATOR                                   */
+ EDTALRT: PROC (PARM_ALRT,                /* IN  ALRT                 */
+                PARM_ALRT_EDITTED,        /* OUT ALRT (EDITTED)       */
+                PARM_ERRMSG)              /* OUT EDIT ERROR MESSAGE   */
+                RETURNS (BIT(01))         /* 0=OK 1=ERROR             */
+                REORDER
+                REDUCIBLE;
+ /*********************************************************************/
+ /*                                                                   */
+ /*  PARAMETER DECLARATIONS                                           */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL PARM_ALRT         CHAR (01);
+ DCL PARM_ALRT_EDITTED CHAR (01);
+ DCL PARM_ERRMSG       CHAR (79);
+ /*********************************************************************/
+ /*                                                                   */
+ /*  EDIT ERROR MESSAGE DECLARATIONS                                  */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL MALRT01E         CHAR (79) STATIC INIT(
+   'MALRT01E - ALERT INDICATOR   MUST BE Y OR N ');
+ /*********************************************************************/
+ /*                                                                   */
+ /*  MAINLINE                                                         */
+ /*                                                                   */
+ /*********************************************************************/
+ IF PARM_ALRT = 'Y'                                                         TRNU
+  | PARM_ALRT = 'N' THEN                                                    TRNU
+    DO;                                                                     TRNU
+       PARM_ALRT_EDITTED = PARM_ALRT;
+       RETURN ('0'B);
+    END;                                                                    TRNU
+ ELSE                                                                       TRNU
+    DO;                                                                     TRNU
+       PARM_ALRT_EDITTED = ' ';
+       PARM_ERRMSG = MALRT01E;
+       RETURN ('1'B);
+    END;                                                                 TRNU
+ END EDTALRT;

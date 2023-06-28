@@ -1,0 +1,31 @@
+ /*        17OCT08 AMTI    : ENTERPRISE PL/I CHANGES              JZIE*/
+ /* CALCCHK : CALCULATE THE CHECK DIGIT                               */
+0CALCCHK : PROC ( CNUM )                    /* IN  CNUM (EDITTED)     */
+           RETURNS ( FIXED BINARY(15) )     /* CHECK DIGIT            */
+           REORDER REDUCIBLE;
+0/*********************************************************************/
+ /*  DCLS .... PARAMETERS / LOCAL VARIABLES                           */
+ /*********************************************************************/
+ DCL CNUM                    PIC '(9)9';
+ DCL 1 CNUM_DEF                               BASED(ADDR(CNUM)),        00221000
+       2 CNUM_ARRAY (9)      PIC '9';
+ DCL I                       FIXED BIN(15);                             00221000
+ DCL CNUM_BIN (9)            FIXED BIN(15);                             00221000
+ DCL DIGIT_SUM               FIXED BIN(15)    INIT (0);
+ DCL CHECK_DIGIT             FIXED BIN(15)    INIT (0);
+ DCL WEIGHTS (8)             FIXED BIN(15) INIT (1,2,5,3,6,4,8,7);
+ DCL ADDR                    BUILTIN;                                   00300000
+ DCL SUM                     BUILTIN;                                   00300000
+ DCL MOD                     BUILTIN;                                   00300000
+1/*                                                                   */
+ /*  MAINLINE                                                         */
+ /*                                                                   */
+ CNUM_BIN (*) = CNUM_ARRAY (*);
+ DO I = 1 TO 8;
+    DIGIT_SUM = DIGIT_SUM + CNUM_BIN (I) * WEIGHTS (I);
+ END;                                                                   00570000
+ CHECK_DIGIT = MOD (DIGIT_SUM, 11);
+ IF CHECK_DIGIT = 10 THEN
+    CHECK_DIGIT = 0;
+ RETURN (CHECK_DIGIT);
+-END CALCCHK;

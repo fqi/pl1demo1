@@ -1,0 +1,646 @@
+ /* MTRHDB2: CLSDB2: ERROR ROUTINE FOR HANDLING DB2 ERRORS USING IMS  */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  ID     WHAT                                       */
+ /* ---------- ---- ------ ------------------------------------------ */
+ /* 1996-05-17 GTRO GMT002 STANDARDIZE. MODIFIED EVERYTHING.          */
+ /* 1996-05-17 GTRO GMT001 UPDATE SQLCA, REMOVE MSG TO MASTER LTERM   */
+ /* 1996-01-01 DTIT        WRITE ERROR TO MERR TABLE AS WELL          */
+ /* 1992-08-20 RLAW        REMOVE NATIONAL SAFETY CODE HEADER         */
+ /* 1990-08-21 AADL                                                   */
+ /* 1990-07-06 ?           ORIGINAL                                   */
+ /*********************************************************************/
+1MTRHDB2: PROC (COMMON,
+                USER_MSG,
+                SQLCA) REORDER;
+0  /*----------------------------------------------------------------*/
+   /* PASSED PARAMATERS
+   /*----------------------------------------------------------------*/
+0  DCL 1 COMMON              CONNECTED,
+         %INCLUDE COMMON;
+0  DCL USER_MSG              CHAR (*);
+0  DCL 1 SQLCA               CONNECTED,
+         2 SQLCAID           CHAR (8),
+         2 SQLCABC           FIXED (31) BINARY,
+         2 SQLCODE           FIXED (31) BINARY,
+         2 SQLERRM           CHAR (70) VAR,
+         2 SQLERRP           CHAR (8),
+         2 SQLERRD(6)        FIXED (31) BINARY,
+         2 SQLWARN,
+           3 SQLWARN0        CHAR (1),
+           3 SQLWARN1        CHAR (1),
+           3 SQLWARN2        CHAR (1),
+           3 SQLWARN3        CHAR (1),
+           3 SQLWARN4        CHAR (1),
+           3 SQLWARN5        CHAR (1),
+           3 SQLWARN6        CHAR (1),
+           3 SQLWARN7        CHAR (1),
+         2 SQLEXT,
+           3 SQLWARN8        CHAR (1),
+           3 SQLWARN9        CHAR (1),
+           3 SQLWARNA        CHAR (1),
+           3 SQLSTATE        CHAR (5);
+0  /*----------------------------------------------------------------*/
+   /* I/O PCB MASK:
+   /*----------------------------------------------------------------*/
+0  DCL 1 IO_PCB              BASED (IO_PCB_ADDR),
+         %INCLUDE IOPCB;
+0  /*----------------------------------------------------------------*/
+   /* EXPRESS PCB MASK
+   /*----------------------------------------------------------------*/
+0  DCL 1 EX_PCB              BASED (EX_PCB_ADDR),
+         %INCLUDE ALTPCB;
+0  /*----------------------------------------------------------------*/
+   /* DB2 RETURN CODE TRANSLATION
+   /*----------------------------------------------------------------*/
+0  DCL DSNTIAR               ENTRY OPTIONS (ASM,INTER,RETCODE);
+0  DCL LEN                   FIXED BIN (31) STATIC INIT (79);
+0  DCL DIM                   FIXED BIN (31) STATIC INIT (7);
+0  DCL 1 ERROR_MESSAGE       AUTOMATIC,
+         3 ERROR_LEN         FIXED BIN (15) UNAL INIT ((LEN*DIM)),
+         3 TEXT (DIM)        CHAR (LEN);
+0  /*-----------------------------------------------------------------*/
+   /* SCREEN ERROR MESSAGE                                            */
+   /*-----------------------------------------------------------------*/
+0  DCL 1 SCREEN,
+         2 LL                FIXED BIN(31),
+         2 ZZ                FIXED BIN(15),
+         2 PGMID             CHAR (8),
+         2 MESSAGE           CHAR (79),
+         2 DBLTERM           CHAR (8),
+         2 SQLCODE           PIC '-999',
+         2 SQLERRP           CHAR (8),
+         2 SQLERRD1          PIC 'ZZZZZZZZZ9',
+         2 SQLERRD2          PIC 'ZZZZZZZZZ9',
+         2 SQLERRD3          PIC 'ZZZZZZZZZ9',
+         2 SQLERRD4          PIC 'ZZZZZZZZZ9',
+         2 SQLERRD5          PIC 'ZZZZZZZZZ9',
+         2 SQLERRD6          PIC 'ZZZZZZZZZ9',
+         2 SQLWARN0          CHAR (1),
+         2 SQLWARN1          CHAR (1),
+         2 SQLWARN2          CHAR (1),
+         2 SQLWARN3          CHAR (1),
+         2 SQLWARN4          CHAR (1),
+         2 SQLWARN5          CHAR (1),
+         2 SQLWARN6          CHAR (1),
+         2 SQLWARN7          CHAR (1),
+         2 SQLEXT,
+           3 SQLWARN8        CHAR (1),
+           3 SQLWARN9        CHAR (1),
+           3 SQLWARNA        CHAR (1),
+           3 SQLSTATE        CHAR (5),
+         2 SQLERR1           CHAR (79),
+         2 SQLERR2           CHAR (79),
+         2 SQLERR3           CHAR (79),
+         2 SQLERR4           CHAR (79),
+         2 SQLERR5           CHAR (79),
+         2 SQLERR6           CHAR (79),
+         2 SQLERR7           CHAR (79),
+         2 SQLERRM           CHAR (70);
+1  /*---------------------------------------------------------------*/
+   /* PL/1 BUILTIN FUNCTION
+   /*---------------------------------------------------------------*/
+0  DCL ADDR                  BUILTIN;
+0  DCL DATE                  BUILTIN;
+0  DCL NULL                  BUILTIN;
+0  DCL ONCODE                BUILTIN;
+0  DCL PLIDUMP               BUILTIN;
+0  DCL PLIRETV               BUILTIN;
+0  DCL PLITDLI               EXT ENTRY;
+0  DCL STORAGE               BUILTIN;
+0  DCL STRING                BUILTIN;
+0  DCL SUBSTR                BUILTIN;
+0  DCL TIME                  BUILTIN;
+1  /*---------------------------------------------------------------*/
+   /* WORKING STORAGE
+   /*---------------------------------------------------------------*/
+0  DCL 1 WS,
+         2 I                 FIXED BIN (15),
+         2 REGION            CHAR (3),
+         2 STATUS_OK         BIT (1),
+         2 SYSTIME           CHAR (9),
+         2 SYSDATE           CHAR (6),
+         2 VALID_STATS       CHAR (20),
+         2 WORK_SQLCODE      CHAR (4),
+         2 ZZZZ_EOWS         CHAR (00);
+0  DCL VALID_CODES (05)      CHAR (4) DEF WS.VALID_STATS;
+0  DCL PIC_SQLCODE           PIC '-999' DEF WS.WORK_SQLCODE;
+0  DCL HH                    PIC '99' DEF WS.SYSTIME;
+0  DCL MM                    PIC '99' DEF WS.SYSTIME POS (3);
+0  DCL SS                    PIC '99' DEF WS.SYSTIME POS (5);
+0  DCL TTT                   PIC '999' DEF WS.SYSTIME POS (7);
+0  DCL YY                    PIC '99' DEF WS.SYSDATE;
+0  DCL MON                   PIC '99' DEF WS.SYSDATE POS (3);
+0  DCL DD                    PIC '99' DEF WS.SYSDATE POS (5);
+1  /*----------------------------------------------------------------*/
+   /* LITERALS (THESE WILL NOT CHANGE VALUE IN THE PROGRAM)
+   /*----------------------------------------------------------------*/
+0  DCL YES                   BIT (1) STATIC INIT ('1'B);
+0  DCL NO                    BIT (1) STATIC INIT ('0'B);
+0  DCL MOD_NAME              CHAR (8) STATIC INIT ('MTRHOE2 ');
+0  DCL ONE                   FIXED BIN(31) INIT (01) STATIC;
+0  DCL TWO                   FIXED BIN(31) INIT (02) STATIC;
+0  DCL THREE                 FIXED BIN(31) INIT (03) STATIC;
+0  DCL FOUR                  FIXED BIN(31) INIT (04) STATIC;
+0  DCL CHNG                  CHAR (4) INIT ('CHNG') STATIC;
+0  DCL PURG                  CHAR (4) INIT ('PURG') STATIC;
+0  DCL ROLB                  CHAR (4) INIT ('ROLB') STATIC;
+0  DCL ROLL                  CHAR (4) INIT ('ROLL') STATIC;
+0  DCL ISRT                  CHAR (4) INIT ('ISRT') STATIC;
+1  /*----------------------------------------------------------------*/
+   /* DB2 INCLUDES
+   /*----------------------------------------------------------------*/
+ EXEC SQL INCLUDE MERR;
+1/*********************************************************************/
+ /* ON ERROR BLOCKS                                                   */
+ /*********************************************************************/
+0   ON ERROR BEGIN;
+       ON ERROR SYSTEM;
+          IF (ONCODE() = 84)
+          THEN
+             CALL PLIDUMP ('TBCNFNHNB',
+                           'MTRHERR COULD NOT BE OPENED, ' ||
+                           'LOOK IN DB2 TABLE:MERR FOR MORE INFO');
+          ELSE
+             DO;
+                CALL PLIDUMP ('TBFH','ON ERROR CALLED');
+                CALL PLITDLI (ONE,ROLL);
+             END;
+          STOP;
+       END;
+1/*********************************************************************/
+ /* MAINLINE                                                          */
+ /*********************************************************************/
+    WS                    = '';
+    MERR_R                = '';
+    ERROR_MESSAGE.TEXT(*) = '';
+0   WS.STATUS_OK          = NO;
+0   /*---------------------------------------------------------------*/
+    /* COMPARE THE STATUS CODE RETURNED FROM THE CALL TO DB2 TO THE
+    /* LIST OF ACCEPTABLE STATUS CODES SUPPLIED BY THE CALLING PROGRAM.
+    /* IF THE STATUS RETURNED IS NOT ACCEPTABLE THEN PRODUCE AN ERROR.
+0   /*---------------------------------------------------------------*/
+0   PIC_SQLCODE           = SQLCA.SQLCODE;
+    WS.VALID_STATS        = COMMON.VALID_STAT;
+0   IF (WS.WORK_SQLCODE = ' 000')
+    THEN
+       WS.STATUS_OK = YES;
+    ELSE
+       DO WS.I = 1 TO 5 WHILE (WS.STATUS_OK = NO);
+          IF (VALID_CODES (WS.I) = WS.WORK_SQLCODE)
+          THEN
+             WS.STATUS_OK = YES;
+       END;
+0   IF (WS.STATUS_OK = YES)
+    THEN
+       RETURN;
+0   /*---------------------------------------------------------------*/
+    /* TRANSLATE ERROR CODE
+    /*---------------------------------------------------------------*/
+0   CALL DSNTIAR (SQLCA,
+                  ERROR_MESSAGE,
+                  LEN);
+0   IF (PLIRETV = 12)
+    THEN
+       ERROR_MESSAGE.TEXT(1) = 'ERROR ' || PLIRETV;
+0   /*---------------------------------------------------------------*/
+    /* CREATE AN ERROR MESSAGE
+    /*---------------------------------------------------------------*/
+0   CALL FORMAT_MESSAGE;
+0   IF (IO_PCB.LTERM = 'MVSBATCH')
+    THEN
+       DO;
+0         EXEC SQL ROLLBACK;
+          WS.REGION = 'MVS';
+       END;
+    ELSE
+       DO;
+0         CALL PLITDLI (TWO,
+                        ROLB,
+                        IO_PCB_ADDR);
+0         CALL PLITDLI (FOUR,
+                        ISRT,
+                        IO_PCB_ADDR,
+                        SCREEN,
+                        MOD_NAME);
+0         WS.REGION = '';
+0         SELECT (IO_PCB.STATCD);
+             WHEN ('  ') WS.REGION = 'MPP';
+             WHEN ('QH') WS.REGION = 'BMP';
+             WHEN ('AL') WS.REGION = 'DLI';
+          END;
+       END;
+    CALL DB2_MERR_INSERT;
+0   IF ((WS.REGION = 'BMP')       |
+        (WS.REGION = 'DLI')       |
+        (WS.REGION = 'MVS'))
+    THEN
+       CALL BATCH_MESSAGE;
+    STOP;
+1/*********************************************************************/
+ /* FORMAT ERROR MESSAGE TO TERMINAL                                  */
+ /*********************************************************************/
+0FORMAT_MESSAGE: PROC;
+    SCREEN                 = '';
+    SCREEN.LL              = STORAGE(SCREEN) - 2;
+    SCREEN.ZZ              = 0;
+    SCREEN.PGMID           = COMMON.PGMID;
+    SCREEN.MESSAGE         = USER_MSG;
+    SCREEN.DBLTERM         = IO_PCB.LTERM;
+    SCREEN.SQLCODE         = SQLCA.SQLCODE;
+    SCREEN.SQLERRP         = SQLCA.SQLERRP;
+    SCREEN.SQLERRD1        = SQLCA.SQLERRD(1);
+    SCREEN.SQLERRD2        = SQLCA.SQLERRD(2);
+    SCREEN.SQLERRD3        = SQLCA.SQLERRD(3);
+    SCREEN.SQLERRD4        = SQLCA.SQLERRD(4);
+    SCREEN.SQLERRD5        = SQLCA.SQLERRD(5);
+    SCREEN.SQLERRD6        = SQLCA.SQLERRD(6);
+    SCREEN.SQLWARN0        = SQLCA.SQLWARN0;
+    SCREEN.SQLWARN1        = SQLCA.SQLWARN1;
+    SCREEN.SQLWARN2        = SQLCA.SQLWARN2;
+    SCREEN.SQLWARN3        = SQLCA.SQLWARN3;
+    SCREEN.SQLWARN4        = SQLCA.SQLWARN4;
+    SCREEN.SQLWARN5        = SQLCA.SQLWARN5;
+    SCREEN.SQLWARN6        = SQLCA.SQLWARN6;
+    SCREEN.SQLWARN7        = SQLCA.SQLWARN7;
+    SCREEN.SQLEXT.SQLWARN8 = SQLCA.SQLEXT.SQLWARN8;                     GMT001
+    SCREEN.SQLEXT.SQLWARN9 = SQLCA.SQLEXT.SQLWARN9;                     GMT001
+    SCREEN.SQLEXT.SQLWARNA = SQLCA.SQLEXT.SQLWARNA;                     GMT001
+    SCREEN.SQLEXT.SQLSTATE = SQLCA.SQLEXT.SQLSTATE;                     GMT001
+    SCREEN.SQLERR1         = ERROR_MESSAGE.TEXT(1);
+    SCREEN.SQLERR2         = ERROR_MESSAGE.TEXT(2);
+    SCREEN.SQLERR3         = ERROR_MESSAGE.TEXT(3);
+    SCREEN.SQLERR4         = ERROR_MESSAGE.TEXT(4);
+    SCREEN.SQLERR5         = ERROR_MESSAGE.TEXT(5);
+    SCREEN.SQLERR6         = ERROR_MESSAGE.TEXT(6);
+    SCREEN.SQLERR7         = ERROR_MESSAGE.TEXT(7);
+    SCREEN.SQLERRM         = SQLCA.SQLERRM;
+-END FORMAT_MESSAGE;
+1/*********************************************************************/
+ /* SEND ERROR TO A DB2 TABLE MERR                                    */
+ /*********************************************************************/
+0DB2_MERR_INSERT: PROC;
+0  DCL RC                    PIC '-99999999';
+0  DCL LINE                  CHAR (80);
+0  DCL 1 LINE1,
+         2 TIMEOUT           CHAR (08) INIT (' '),
+         2 FILL1             CHAR (16) INIT (' '),
+         2 FILL2             CHAR (28) INIT
+           ('MOTOR VEHICLE BRANCH SYSTEMS'),
+         2 FILL3             CHAR (19) INIT (' '),
+         2 DATEOUT           CHAR (09) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE2,
+         2 FILL2             CHAR (09) INIT ('PROGRAM:'),
+         2 PGM               CHAR (13) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE3,
+         2 MESSAGE           CHAR (79) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE4,
+         2 FILL2             CHAR (47) INIT
+           ('DB/LTERM  SQLCODE  SQLERRP   SQLERRD           '),
+         2 FILL3             CHAR (33) INIT
+           ('  SQLWARN            SQLSTATE'),                           GMT001
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE5,
+         2 DBLTERM           CHAR (08) INIT (' '),
+         2 FILL2             CHAR (04) INIT (' '),
+         2 SQLCODE           PIC '-999' INIT ('0'),
+         2 FILL3             CHAR (03) INIT (' '),
+         2 SQLERRP           CHAR (08) INIT (' '),
+         2 FILL4             CHAR (07) INIT ('  (1)'),
+         2 SQLERRD1          PIC '(10)9' INIT ('0'),
+         2 FILL5             CHAR (10) INIT ('      (0)'),
+         2 SQLWARN0          CHAR (01) INIT (' '),
+         2 FILL6             CHAR (05) INIT (' (1)'),
+         2 SQLWARN1          CHAR (01) INIT (' '),
+         2 FILL7             CHAR (09) INIT (' '),
+         2 SQLSTATE          CHAR (05) INIT (' '),                      GMT001
+         2 FILL8             CHAR (03) INIT (' '),                      GMT001
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE6,
+         2 FILL1             CHAR (29) INIT (' '),
+         2 FILL2             CHAR (05) INIT ('(2)'),
+         2 SQLERRD2          PIC '(10)9' INIT ('0'),
+         2 FILL3             CHAR (10) INIT ('      (2)'),
+         2 SQLWARN2          CHAR (01) INIT (' '),
+         2 FILL4             CHAR (05) INIT (' (3)'),
+         2 SQLWARN3          CHAR (01) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE7,
+         2 FILL1             CHAR (29) INIT (' '),
+         2 FILL2             CHAR (05) INIT ('(3)'),
+         2 SQLERRD3          PIC '(10)9' INIT ('0'),
+         2 FILL3             CHAR (10) INIT ('      (4)'),
+         2 SQLWARN4          CHAR (01) INIT (' '),
+         2 FILL4             CHAR (05) INIT (' (5)'),
+         2 SQLWARN5          CHAR (01) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE8,
+         2 FILL1             CHAR (29) INIT (' '),
+         2 FILL2             CHAR (05) INIT ('(4)'),
+         2 SQLERRD4          PIC '(10)9' INIT ('0'),
+         2 FILL3             CHAR (10) INIT ('      (6)'),
+         2 SQLWARN6          CHAR (01) INIT (' '),
+         2 FILL4             CHAR (05) INIT (' (7)'),
+         2 SQLWARN7          CHAR (01) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE9,
+         2 FILL1             CHAR (29) INIT (' '),
+         2 FILL2             CHAR (05) INIT ('(5)'),
+         2 SQLERRD5          PIC '(10)9' INIT ('0'),
+         2 FILL3             CHAR (10) INIT ('      (8)'),              GMT001
+         2 SQLWARN8          CHAR (01) INIT (' '),                      GMT001
+         2 FILL4             CHAR (05) INIT (' (9)'),                   GMT001
+         2 SQLWARN9          CHAR (01) INIT (' '),                      GMT001
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE10,
+         2 FILL1             CHAR (29) INIT (' '),
+         2 FILL2             CHAR (05) INIT ('(6)'),
+         2 SQLERRD6          PIC '(10)9' INIT ('0'),
+         2 FILL3             CHAR (10) INIT ('      (8)'),              GMT001
+         2 SQLWARNA          CHAR (01) INIT (' '),                      GMT001
+         2 FILL4             CHAR (06) INIT (' (9)'),                   GMT001
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE11,
+         2 SQLMESS           CHAR (79) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+0  DCL 1 LINE12,
+         2 FILL2             CHAR (09) INIT ('SQLERRM:'),
+         2 SQLERRM           CHAR (70) INIT (' '),
+         2 EOM               CHAR (00) INIT ('');
+1   /*----------------------------------------------------------------*/
+    /* FORMAT AND PRINT BATCH ERROR REPORT
+    /*----------------------------------------------------------------*/
+    MERR_R.TRAN     = COMMON.PGMID;
+    MERR_R.ROUT     = 'MTRHDB2';
+    MERR_R.CALL     = '????????????';
+    RC              = SCREEN.SQLCODE;
+    MERR_R.RTCD     = STRING(RC);
+    MERR_R.RSCD     = SCREEN.SQLEXT.SQLWARN8 ||
+                      SCREEN.SQLEXT.SQLWARN9 ||
+                      SCREEN.SQLEXT.SQLWARNA ||
+                      SCREEN.SQLEXT.SQLSTATE;
+    MERR_R.EMSG     = USER_MSG;
+0   WS.SYSTIME      = TIME;
+    WS.SYSDATE      = DATE;
+0   LINE1.DATEOUT   = YY||'/'||MON||'/'||DD;
+    LINE1.TIMEOUT   = HH||':'||MM||':'||SS;
+    LINE            = STRING(LINE1);
+    MERR_R.SCRN     = LINE;
+0   LINE2.PGM       = COMMON.PGMID;
+    LINE            = STRING(LINE2);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE3.MESSAGE   = USER_MSG;
+    LINE            = STRING(LINE3);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+    LINE            = STRING(LINE4);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE5.DBLTERM   = IO_PCB.LTERM;
+    LINE5.SQLCODE   = SCREEN.SQLCODE;
+    LINE5.SQLERRP   = SCREEN.SQLERRP;
+    LINE5.SQLERRD1  = SCREEN.SQLERRD1;
+    LINE5.SQLWARN0  = SCREEN.SQLWARN0;
+    LINE5.SQLWARN1  = SCREEN.SQLWARN1;
+    LINE5.SQLSTATE  = SCREEN.SQLEXT.SQLSTATE;                           GMT001
+    LINE            = STRING(LINE5);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE6.SQLERRD2  = SCREEN.SQLERRD2;
+    LINE6.SQLWARN2  = SCREEN.SQLWARN2;
+    LINE6.SQLWARN3  = SCREEN.SQLWARN3;
+    LINE            = STRING(LINE6);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE7.SQLERRD3  = SCREEN.SQLERRD3;
+    LINE7.SQLWARN4  = SCREEN.SQLWARN4;
+    LINE7.SQLWARN5  = SCREEN.SQLWARN5;
+    LINE            = STRING(LINE7);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE8.SQLERRD4  = SCREEN.SQLERRD4;
+    LINE8.SQLWARN6  = SCREEN.SQLWARN6;
+    LINE8.SQLWARN7  = SCREEN.SQLWARN7;
+    LINE            = STRING(LINE8);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE9.SQLERRD5  = SCREEN.SQLERRD5;
+    LINE9.SQLWARN8  = SCREEN.SQLEXT.SQLWARN8;                           GMT001
+    LINE9.SQLWARN9  = SCREEN.SQLEXT.SQLWARN9;                           GMT001
+    LINE            = STRING(LINE9);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE10.SQLERRD6 = SCREEN.SQLERRD6;
+    LINE10.SQLWARNA = SCREEN.SQLEXT.SQLWARNA;                           GMT001
+    LINE            = STRING(LINE10);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(1);
+    LINE            = STRING(LINE11);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(2);
+    LINE            = STRING(LINE11);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(3);
+    LINE            = STRING(LINE11);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(4);
+    LINE            = STRING(LINE11);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(5);
+    LINE            = STRING(LINE11);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(6);
+    LINE            = STRING(LINE11);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(7);
+    LINE            = STRING(LINE11);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE12.SQLERRM  = SCREEN.SQLERRM;
+    LINE            = STRING(LINE12);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   EXEC SQL
+       INSERT
+       INTO MERR (PATS,
+                  TRAN,
+                  ROUT,
+                  CALL,
+                  RTCD,
+                  RSCD,
+                  EMSG,
+                  SCRN)
+       VALUES    (CURRENT TIMESTAMP,
+                  :MERR_R.TRAN,
+                  'MTRHDB2',
+                  :MERR_R.CALL,
+                  :MERR_R.RTCD,
+                  :MERR_R.RSCD,
+                  :MERR_R.EMSG,
+                  :MERR_R.SCRN);
+-END DB2_MERR_INSERT;
+1/*********************************************************************/
+ /* BATCH ERROR REPORT                                                */
+ /*   DT JAN 96 - A TCP/IP MPP PROGRAM WILL ABEND WHEN TRYING TO      */
+ /*               MTRHERR, THIS WILL THEN BE HANDLED BY A ON CODE 84  */
+ /*********************************************************************/
+1BATCH_MESSAGE: PROC;
+0  DCL MTRHERR                 OUTPUT RECORD FILE
+                                     ENV(TOTAL,FB,CTLASA,RECSIZE(133));
+0  DCL 1 LINE1,
+         2 CC                  CHAR (01) INIT ('1'),
+         2 FILL2               CHAR (33) INIT
+           ('   MOTOR VEHICLE BRANCH    '),
+         2 DATEOUT             CHAR (09) INIT (' '),
+         2 FILL3               CHAR (03) INIT (' '),
+         2 TIMEOUT             CHAR (08) INIT (' '),
+         2 FILL4               CHAR (79) INIT (' ');
+0  DCL 1 LINE2,
+         2 CC                  CHAR (01) INIT (' '),
+         2 FILL2               CHAR (09) INIT ('PROGRAM:'),
+         2 PGM                 CHAR (13) INIT (' '),
+         2 FILL5               CHAR (110) INIT (' ');
+0  DCL 1 LINE3,
+         2 CC                  CHAR (01) INIT (' '),
+         2 MESSAGE             CHAR (79) INIT (' '),
+         2 FILL2               CHAR (53) INIT (' ');
+0  DCL 1 LINE4,
+         2 CC                  CHAR (01) INIT ('0'),
+         2 FILL2               CHAR (47) INIT
+           ('DB/LTERM  SQLCODE  SQLERRP   SQLERRD           '),
+         2 FILL3               CHAR (85) INIT
+           ('  SQLWARN            SQLSTATE');                           GMT001
+0  DCL 1 LINE5,
+         2 CC                  CHAR (01) INIT (' '),
+         2 DBLTERM             CHAR (08) INIT (' '),
+         2 FILL2               CHAR (04) INIT (' '),
+         2 SQLCODE             PIC '-999' INIT ('0'),
+         2 FILL3               CHAR (03) INIT (' '),
+         2 SQLERRP             CHAR (08) INIT (' '),
+         2 FILL4               CHAR (07) INIT ('  (1)'),
+         2 SQLERRD1            PIC '(10)9' INIT ('0'),
+         2 FILL5               CHAR (10) INIT ('      (0)'),
+         2 SQLWARN0            CHAR (01) INIT (' '),
+         2 FILL6               CHAR (05) INIT (' (1)'),
+         2 SQLWARN1            CHAR (01) INIT (' '),
+         2 FILL7               CHAR (09) INIT (' '),
+         2 SQLSTATE            CHAR (05) INIT (' '),                    GMT001
+         2 FILL8               CHAR (57) INIT (' ');                    GMT001
+0  DCL 1 LINE6,
+         2 CC                  CHAR (01) INIT (' '),
+         2 FILL1               CHAR (29) INIT (' '),
+         2 FILL2               CHAR (05) INIT ('(2)'),
+         2 SQLERRD2            PIC '(10)9' INIT ('0'),
+         2 FILL3               CHAR (10) INIT ('      (2)'),
+         2 SQLWARN2            CHAR (01) INIT (' '),
+         2 FILL4               CHAR (05) INIT (' (3)'),
+         2 SQLWARN3            CHAR (01) INIT (' '),
+         2 FILL5               CHAR (71) INIT (' ');
+0  DCL 1 LINE7,
+         2 CC                  CHAR (01) INIT (' '),
+         2 FILL1               CHAR (29) INIT (' '),
+         2 FILL2               CHAR (05) INIT ('(3)'),
+         2 SQLERRD3            PIC '(10)9' INIT ('0'),
+         2 FILL3               CHAR (10) INIT ('      (4)'),
+         2 SQLWARN4            CHAR (01) INIT (' '),
+         2 FILL4               CHAR (05) INIT (' (5)'),
+         2 SQLWARN5            CHAR (01) INIT (' '),
+         2 FILL5               CHAR (71) INIT (' ');
+0  DCL 1 LINE8,
+         2 CC                  CHAR (01) INIT (' '),
+         2 FILL1               CHAR (29) INIT (' '),
+         2 FILL2               CHAR (05) INIT ('(4)'),
+         2 SQLERRD4            PIC '(10)9' INIT ('0'),
+         2 FILL3               CHAR (10) INIT ('      (6)'),
+         2 SQLWARN6            CHAR (01) INIT (' '),
+         2 FILL4               CHAR (05) INIT (' (7)'),
+         2 SQLWARN7            CHAR (01) INIT (' '),
+         2 FILL5               CHAR (71) INIT (' ');
+0  DCL 1 LINE9,
+         2 CC                  CHAR (01) INIT (' '),
+         2 FILL1               CHAR (29) INIT (' '),
+         2 FILL2               CHAR (05) INIT ('(5)'),
+         2 SQLERRD5            PIC '(10)9' INIT ('0'),
+         2 FILL3               CHAR (10) INIT ('      (8)'),            GMT001
+         2 SQLWARN8            CHAR (01) INIT (' '),                    GMT001
+         2 FILL4               CHAR (05) INIT (' (9)'),                 GMT001
+         2 SQLWARN9            CHAR (01) INIT (' '),                    GMT001
+         2 FILL5               CHAR (71) INIT (' ');                    GMT001
+0  DCL 1 LINE10,
+         2 CC                  CHAR (01) INIT (' '),
+         2 FILL1               CHAR (29) INIT (' '),
+         2 FILL2               CHAR (05) INIT ('(6)'),
+         2 SQLERRD6            PIC '(10)9' INIT ('0'),
+         2 FILL3               CHAR (10) INIT ('      (A)'),            GMT001
+         2 SQLWARNA            CHAR (01) INIT (' '),                    GMT001
+         2 FILL5               CHAR (77) INIT (' ');                    GMT001
+0  DCL 1 LINE11,
+         2 CC                  CHAR (01) INIT (' '),
+         2 SQLMESS             CHAR (79) INIT (' '),
+         2 FILL2               CHAR (53) INIT (' ');
+0  DCL 1 LINE12,
+         2 CC                  CHAR (01) INIT (' '),
+         2 FILL2               CHAR (09) INIT ('SQLERRM:'),
+         2 SQLERRM             CHAR (70) INIT (' '),
+         2 FILL3               CHAR (53) INIT (' ');
+1   /*----------------------------------------------------------------*/
+    /* FORMAT AND PRINT BATCH ERROR REPORT
+    /*----------------------------------------------------------------*/
+0   WS.SYSTIME      = TIME;
+    WS.SYSDATE      = DATE;
+0   LINE1.DATEOUT   = YY||'/'||MON||'/'||DD;
+    LINE1.TIMEOUT   = HH||':'||MM||':'||SS;
+    WRITE FILE(MTRHERR) FROM (LINE1);
+0   LINE2.PGM       = COMMON.PGMID;
+    WRITE FILE(MTRHERR) FROM (LINE2);
+0   LINE3.MESSAGE   = USER_MSG;
+    WRITE FILE(MTRHERR) FROM (LINE3);
+0   WRITE FILE(MTRHERR) FROM (LINE4);
+0   LINE5.DBLTERM   = IO_PCB.LTERM;
+    LINE5.SQLCODE   = SCREEN.SQLCODE;
+    LINE5.SQLERRP   = SCREEN.SQLERRP;
+    LINE5.SQLERRD1  = SCREEN.SQLERRD1;
+    LINE5.SQLWARN0  = SCREEN.SQLWARN0;
+    LINE5.SQLWARN1  = SCREEN.SQLWARN1;
+    LINE5.SQLSTATE  = SCREEN.SQLEXT.SQLSTATE;                           GMT001
+    WRITE FILE(MTRHERR) FROM (LINE5);
+0   LINE6.SQLERRD2  = SCREEN.SQLERRD2;
+    LINE6.SQLWARN2  = SCREEN.SQLWARN2;
+    LINE6.SQLWARN3  = SCREEN.SQLWARN3;
+    WRITE FILE(MTRHERR) FROM (LINE6);
+0   LINE7.SQLERRD3  = SCREEN.SQLERRD3;
+    LINE7.SQLWARN4  = SCREEN.SQLWARN4;
+    LINE7.SQLWARN5  = SCREEN.SQLWARN5;
+    WRITE FILE(MTRHERR) FROM (LINE7);
+0   LINE8.SQLERRD4  = SCREEN.SQLERRD4;
+    LINE8.SQLWARN6  = SCREEN.SQLWARN6;
+    LINE8.SQLWARN7  = SCREEN.SQLWARN7;
+    WRITE FILE(MTRHERR) FROM (LINE8);
+0   LINE9.SQLERRD5  = SCREEN.SQLERRD5;
+    LINE9.SQLWARN8  = SCREEN.SQLEXT.SQLWARN8;                           GMT001
+    LINE9.SQLWARN9  = SCREEN.SQLEXT.SQLWARN8;                           GMT001
+    WRITE FILE(MTRHERR) FROM (LINE9);
+0   LINE10.SQLERRD6 = SCREEN.SQLERRD6;
+    LINE10.SQLWARNA = SCREEN.SQLEXT.SQLWARNA;                           GMT001
+    WRITE FILE(MTRHERR) FROM (LINE10);
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(1);
+    WRITE FILE(MTRHERR) FROM (LINE11);
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(2);
+    WRITE FILE(MTRHERR) FROM (LINE11);
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(3);
+    WRITE FILE(MTRHERR) FROM (LINE11);
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(4);
+    WRITE FILE(MTRHERR) FROM (LINE11);
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(5);
+    WRITE FILE(MTRHERR) FROM (LINE11);
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(6);
+    WRITE FILE(MTRHERR) FROM (LINE11);
+0   LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(7);
+    WRITE FILE(MTRHERR) FROM (LINE11);
+0   LINE12.SQLERRM  = SCREEN.SQLERRM;
+    WRITE FILE(MTRHERR) FROM (LINE12);
+0   /*---------------------------------------------------------------*/
+    /* IS A ROLL JUST IN CASE, THIS WOULD ALSO BACK OUT THE INSERT
+    /* TO THE MERR TABLE, BUT IS BETTER TO BE SURE THAN SORRY
+    /* JAN/96 DT ROLL ON A BMP/NOT TCPIP MPP
+    /*---------------------------------------------------------------*/
+0   IF ( WS.REGION ^= 'MVS' )
+    THEN
+       CALL PLITDLI (ONE,ROLL);
+-END BATCH_MESSAGE;
+-END MTRHDB2;

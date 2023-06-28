@@ -1,0 +1,211 @@
+ /* UPDALRT  CLSDB2:                                                  */00000101
+ /*         UPDATE THE ALRT FLAG ON THE USBY TABLE WHEN MSCD CHANGE   */00000201
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */00000301
+ /*********************************************************************/00000401
+ /*                                                                   */00000501
+ /* WHEN       WHO  CR #     WHAT                                     */00000601
+ /* ---------- ---- -------- ---------------------------------------- */00000701
+ /* 1999-11-25 MMC  ILS      INDEFINITE LICENCE SUSPENSION PROJECT    */00000501
+ /* 1998-11-06 MMC  C980246  Y2K COMPLIANT                            */00000801
+ /* 91MAR18 GTRO CR523 USE USBYCHG INSTEAD OF USBYDEL AND USBYADD     */00070000
+ /* 91JAN10 GTRO CR507 DRIVER'S SYSTEM CLEAN UP                       */00080000
+ /* 90JUL26 GBRO REL12 ORIGINAL CREATION                              */00090000
+ /* 90AUG16 GBRO       ASSIGN 2ND EXPRESS PCB TO COMMON EXPRESS PCB   */00100000
+ /*********************************************************************/00110000
+1UPDALRT: PROCEDURE (COMMON,                /* DRIVER COMMON AREA     */C980246
+                     LNUM,                  /* DRIVER LICENCE NUMBER  */00130000
+                     OLD_MSCD,              /* OLD MASTER STATUS      */00140000
+                     NEW_MSCD,              /* NEW MASTER STATUS      */00150000
+                     CALC_ALRT,             /* CALCULATED ALERT FLAG  */00160000
+                     RETURN_CODE,           /* RETURN CODE            */00170000
+                     SYSMSG)                /* ERROR MESSAGE          */00180000
+                     REORDER;                                           C980246
+1  /*----------------------------------------------------------------*/ 00200000
+   /* SUBROUTINE DECLARES                                               00210000
+   /*----------------------------------------------------------------*/ 00220000
+   DCL 1 COMMON   CONNECTED,
+       %INCLUDE COMMON;
+   DCL COMMON_PTR            POINTER;                                   C980246
+0  DCL LNUM                  FIXED BIN(31,0);                           00230000
+0  DCL OLD_MSCD              CHAR (1);                                  00240000
+0  DCL NEW_MSCD              CHAR (1);                                  00250000
+0  DCL CALC_ALRT             CHAR (1);                                  00260000
+0  DCL RETURN_CODE           FIXED BIN(15,0);                           00270000
+0  DCL SYSMSG                CHAR(79);                                  00280000
+0  DCL CLNO_PIC              PIC '(9)9' INIT (0);                       00290000
+0  DCL LNUM_PIC              PIC '(7)9' INIT (0);                       00300000
+0  DCL ERROR01               CHAR(79)   INIT                            00310000
+       ('UPDALRT - ERROR READING THE USBY ROW');                        00320000
+   DCL (ADDR,                                                           C980246
+        NULL)                BUILTIN;
+1  /*----------------------------------------------------------------*/ 00330000
+   /* EXTERNAL DECLARES                                                 00440000
+   /*----------------------------------------------------------------*/ 00350000
+1%INCLUDE DSDRPCB;                                                      00390000
+1%INCLUDE DSIOPCB;                                                      00400000
+1%INCLUDE STDPARM;                                                      C980246
+1  /*----------------------------------------------------------------*/ 00430000
+   /* EXTERNAL ROUTINES                                                 00340000
+   /*----------------------------------------------------------------*/ 00450000
+-%INCLUDE DSCLNUM;                                                      00360000
+1%INCLUDE MTRHDB2;                                                      C980246
+1%INCLUDE MTRHDLI;                                                      C980246
+1%INCLUDE USBYCHG;                                          /* CR523 */ 00420000
+1  /*----------------------------------------------------------------*/ 00480000
+   /* SQL                                                               00490000
+   /*----------------------------------------------------------------*/ 00500000
+0  DCL DB2LOCK               EXTERNAL CONDITION;                        00510000
+0  EXEC SQL INCLUDE SQLCA;                                              00520000
+0  EXEC SQL INCLUDE USBY;               /* CLIENT USED BY TABLE       */00530000
+0  EXEC SQL INCLUDE USBYAT;             /* USED BY ATTRIBUTE TABLE    */00540000
+1  /*----------------------------------------------------------------*/ 00610000
+   /* USBYCHG PARMS                                                     00620000
+   /*----------------------------------------------------------------*/ 00630000
+0  DCL 1 USBYCHG_PARM,                                      /* CR523 */ 00640000
+         3 CLNO              FIXED BIN(31), /* CLIENT NUMBER          */00650000
+         3 AREF              CHAR(10),      /* ADDRESS REFERENCE      */00660000
+         3 SYST              CHAR(04),      /* USING SYS IDENTIFIER   */00670000
+         3 USAK              CHAR(50) VAR,  /* USING SYS ACCESS KEY   */00680000
+         3 UREL              CHAR(03),      /* 'UNL' = UNLICENCED     */00690000
+         3 USID              CHAR(08),      /* USERID                 */00700000
+         3 NEW_UREL          CHAR(03),      /* NEW USBY RELATIONSHIP  */00710000
+                                            /* 'UNL' = UNLICENCED     */00720000
+                                            /* 'LIC' = LICENCED       */00730000
+                                            /* '=  ' = NO CHANGE      */00740000
+         3 NEW_NOVW          CHAR(01),      /* NEW NO VIEW TO CLIENT  */00750000
+                                            /* '=' = NO CHANGE        */00760000
+         3 NEW_ALRT          CHAR(01);      /* NEW ALERT DRIVERS      */00770000
+                                            /* '=' = NO CHANGE        */00780000
+1/********************************************************************/ 00790000
+ /* MAINLINE                                                            00800000
+ /********************************************************************/ 00810000
+0   /*---------------------------------------------------------------*/ 00820000
+    /* INITIALIZE                                                       00830000
+    /*---------------------------------------------------------------*/ 00840000
+    RETURN_CODE        = 0;                                             00870000
+    SQLCA              = '';                                            00880000
+    SYSMSG             = '';                                            00890000
+    USBY_T             = '';                                            00900000
+    USBYCHG_PARM       = '';                                            00910000
+    DSIOPCB_PTR        = COMMON.IO_PCB_ADDR;
+    COMMON_PTR         = ADDR (COMMON);                                 00930000
+    COMMON.PGMID       = 'UPDALRT';
+1   /*---------------------------------------------------------------*/ 01010000
+    /* MAIN PROCESSING                                                  01020000
+    /*---------------------------------------------------------------*/ 01030000
+0   SELECT (NEW_MSCD);                                                  01050000
+0      /*------------------------------------------------------------*/ 01060000
+       /* = TURN IT ON                                                  01070000
+       /*------------------------------------------------------------*/ 01080000
+       WHEN ('1','2','3','8')                                           ILS
+          SELECT (OLD_MSCD);                                            01100000
+0            /*------------------------------------------------------*/ 01110000
+             /* FLAG IS ALREADY ON                                      01120000
+             /*------------------------------------------------------*/ 01130000
+             WHEN ('1','2','3','8') CALC_ALRT = '=';                    ILS
+0            /*------------------------------------------------------*/ 01150000
+             /* TURN THE FLAG OFF                                       01160000
+             /*------------------------------------------------------*/ 01170000
+             OTHERWISE          CALC_ALRT = 'Y';                        01180000
+          END; /* SELECT */                                             01190000
+0      /*------------------------------------------------------------*/ 01200000
+       /* = TURN IT OFF                                                 01210000
+       /*------------------------------------------------------------*/ 01220000
+       OTHERWISE                                                        01230000
+          SELECT (OLD_MSCD);                                            01240000
+0            /*------------------------------------------------------*/ 01250000
+             /* TURN THE FLAG OFF                                       01260000
+             /*------------------------------------------------------*/ 01270000
+             WHEN ('1','2','3','8') CALC_ALRT = 'N';                    ILS
+0            /*------------------------------------------------------*/ 01290000
+             /* FLAG IS ALREADY OFF                                     01300000
+             /*------------------------------------------------------*/ 01310000
+             OTHERWISE          CALC_ALRT = '=';                        01320000
+          END;  /* SELECT */                                            01330000
+    END; /* SELECT */                                                   01340000
+    IF (CALC_ALRT = '=') THEN;     /* 'NO CHANGE' IS INDICATED   */     01350000
+    ELSE                                                                01360000
+       CALL UPDATE_USED_BY;                                             01370000
+1/*********************************************************************/01380000
+ /*  UPDATE THE 'ALERT DESIRED' FIELD ON THE USED BY TABLE BY:          01390000
+ /*  - GET THE USBY ROW                                                 01400000
+ /*  - DELETE THE USBY ROW                                              01410000
+ /*  - ADD A NEW USBY ROW WITH THE CHANGED INFORMATION                  01420000
+ /*********************************************************************/01430000
+0UPDATE_USED_BY: PROC;                                                  01440000
+    LNUM_PIC = LNUM;                                                    01460000
+    CLNO_PIC = DSCLNUM (LNUM_PIC);                                      01470000
+0   CALL GET_USBY;                                                      01480000
+0   CALL CHANGE_USBY;                                                   01490000
+-END UPDATE_USED_BY;                                                    01500000
+1/*********************************************************************/01510000
+ /* GET THE USBY ROW FOR THE DRIVER/CLIENT                              01520000
+ /*********************************************************************/01530000
+0GET_USBY: PROC;                                                        01540000
+    USBY_T.CLNO = CLNO_PIC;                                             01560000
+    USBY_T.SYST = 'DSSM';                                               01570000
+    USBY_T.USAK = LNUM_PIC;                                             01580000
+0   EXEC SQL                                                            01590000
+         SELECT CLNO,                                                   01600000
+                AREF,                                                   01610000
+                SYST,                                                   01620000
+                USAK,                                                   01630000
+                UREL,                                                   01640000
+                USID,                                                   01650000
+                ACNN,                                                   01660000
+                NOVW,                                                   01670000
+                ALRT                                                    01680000
+         INTO   :USBY_T.CLNO :USBY_A.CLNO,                              01690000
+                :USBY_T.AREF :USBY_A.AREF,                              01700000
+                :USBY_T.SYST :USBY_A.SYST,                              01710000
+                :USBY_T.USAK :USBY_A.USAK,                              01720000
+                :USBY_T.UREL :USBY_A.UREL,                              01730000
+                :USBY_T.USID :USBY_A.USID,                              01740000
+                :USBY_T.ACNN :USBY_A.ACNN,                              01750000
+                :USBY_T.NOVW :USBY_A.NOVW,                              01760000
+                :USBY_T.ALRT :USBY_A.ALRT                               01770000
+         FROM    USBY                                                   01780000
+         WHERE  CLNO = :USBY_T.CLNO                                     01790000
+         AND    SYST = :USBY_T.SYST                                     01800000
+         AND    USAK = :USBY_T.USAK;                                    01810000
+0   VALID_STAT  = ' 000';                                               01820000
+0   CALL MTRHDB2 (COMMON,                                               01830000
+                  ERROR01,                                              01840000
+                  SQLCA);                                               01850000
+-END GET_USBY;                                                          01860000
+1/*********************************************************************/01870000
+ /*  FORMAT THE USBY INFORMATION                                        01880000
+ /*  CHANGE THE USBY ROW                                                01890000
+ /*********************************************************************/01900000
+0CHANGE_USBY: PROC;                                                     01910000
+    USBYCHG_PARM.CLNO     = USBY_T.CLNO;                    /* CR523 */ 01930000
+    USBYCHG_PARM.AREF     = USBY_T.AREF;                    /* CR523 */ 01940000
+    USBYCHG_PARM.SYST     = USBY_T.SYST;                    /* CR523 */ 01950000
+    USBYCHG_PARM.USAK     = USBY_T.USAK;                    /* CR523 */ 01960000
+    USBYCHG_PARM.UREL     = USBY_T.UREL;                    /* CR523 */ 01970000
+0   IF (COMMON.IO_PCB_ADDR = NULL()) THEN                               C980246
+       USBYCHG_PARM.USID = COMMON.PGMID;                  /* CR523 */   C980246
+    ELSE                                                                02000000
+       USBYCHG_PARM.USID = DSIOPCB.USERID;                  /* CR523 */ 02010000
+0   USBYCHG_PARM.NEW_NOVW = '=';                            /* CR523 */ 02020000
+    USBYCHG_PARM.NEW_UREL = '=';                            /* CR523 */ 02030000
+    USBYCHG_PARM.NEW_ALRT = CALC_ALRT;                      /* CR523 */ 02040000
+0   IF (USBYCHG ('MTRHDB2',                                             02050000
+                 COMMON_PTR,                                            02060000
+                 USBYCHG_PARM.CLNO,                         /* CR523 */ 02070000
+                 USBYCHG_PARM.AREF,                         /* CR523 */ 02080000
+                 USBYCHG_PARM.SYST,                         /* CR523 */ 02090000
+                 USBYCHG_PARM.USAK,                         /* CR523 */ 02100000
+                 USBYCHG_PARM.UREL,                         /* CR523 */ 02110000
+                 USBYCHG_PARM.USID,                         /* CR523 */ 02120000
+                 USBYCHG_PARM.NEW_UREL,                     /* CR523 */ 02130000
+                 USBYCHG_PARM.NEW_NOVW,                     /* CR523 */ 02140000
+                 USBYCHG_PARM.NEW_ALRT,                     /* CR523 */ 02150000
+                 SYSMSG) ^= 0)                                          02160000
+     THEN
+0         CALL MTRHDLI (COMMON,                                         C980246
+                        SYSMSG,                                         C980246
+                        ONE,                                            02200000
+                        ROLL);                                          02210000
+-END CHANGE_USBY;                                                       02230000
+-END UPDALRT;                                                           02240000

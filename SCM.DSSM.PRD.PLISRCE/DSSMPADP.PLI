@@ -1,0 +1,992 @@
+ /* DSSMPADP       : ADD/REMOVE STATUS                                */
+ /* OWNING SYSTEM  : DSSM                                             */
+ /*********************************************************************/
+ /* 2010-05-21 MMC  PURGE 0-1041 FOR SUS AND PROHIB                   */
+ /* 2010-05-21 MMC  IDEP PROJECT                                      */
+ /* 2008-03-23 MMC  EDLP2   ADD QUERY                                 */
+ /* 2008-11-19 MMC  EDLP2   GET RID OF TCP/IP                         */
+ /*********************************************************************/
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                - ADDS A NEW STATUS SEGMENT                        */
+ /*                - DETERMINES THE MASTER STATUS                     */
+ /*                - CHANGES THE MASTER STATUS IF NECESSARY           */
+ /*                - TRANSMITS MESSAGES BACK TO PEER                  */
+ /*  INPUT:        DSSMIADP                                           */
+ /*  OUTPUT:       DSSMOADP                                           */
+ /*********************************************************************/
+ DSSMADP:  PROCEDURE (IO_PCB_PTR,
+                      EX_PCB_PTR,
+                      AL_PCB_PTR,
+                      DSDRPCB_PTR,
+                      DSLNPCB_PTR) OPTIONS(MAIN) REORDER ;
+
+ %INCLUDE STDMPP;
+ %INCLUDE DR1MST;
+ %INCLUDE DR1NAME;
+ %INCLUDE DR1STAT;
+ %INCLUDE DSDRPCB;
+ %INCLUDE DSLNPCB;
+ %INCLUDE STATDAO;
+ %INCLUDE DLIERR;
+
+   /*----------------------------------------------------------------*/
+   /*  DB2 INCLUDES
+   /*----------------------------------------------------------------*/
+   EXEC SQL INCLUDE SQLCA;                                              36651
+
+ /*-------------------------------------------------------------------*/
+ /*  I/O STRUCTURES                                                   */
+ /*-------------------------------------------------------------------*/
+ DCL (MSGIN,MSGOUT)        CHAR(1024) INIT('');
+ DCL 1 DSSMIADP             BASED(ADDR(MSGIN)),
+       2 CTRL_FLDS,
+         3 LL               FIXED BIN (31),
+         3 ZZ               FIXED BIN (15),
+         3 TRAN             CHAR (08),
+         3 FILLER           CHAR (01),
+       2 DATA,
+           %INCLUDE DSSMADP;
+       2 EOM                CHAR(00);
+
+ DCL 1 DSSMOADP             BASED(ADDR(MSGOUT)),
+       2 CTRL_FLDS,
+         3 LL               FIXED BIN (31),
+         3 ZZ               FIXED BIN (15),
+         3 TRAN             CHAR (08),
+         3 FILLER           CHAR (01),
+       2 DATA,
+           %INCLUDE DSSMADP;
+       2 SYSMSG       CHAR(80), /* ERROR MESSAGE FROM TCP HEAD   */
+       2 EOM                CHAR(00);
+
+ /*-------------------------------------------------------------------*/
+ /*  BUILTIN FUNCTION DECLARES                                        */
+ /*-------------------------------------------------------------------*/
+ DCL ADDR     BUILTIN;
+ DCL INDEX    BUILTIN;
+ DCL NULL     BUILTIN;
+ DCL ONCODE   BUILTIN;
+ DCL ONLOC    BUILTIN;
+ DCL PLIDUMP  BUILTIN;
+ DCL STORAGE  BUILTIN;
+ DCL SUBSTR   BUILTIN;
+ DCL VERIFY   BUILTIN;
+ DCL SYSPRINT           EXTERNAL FILE PRINT;
+ /*-------------------------------------------------------------------*/
+ /*  EXTERNAL SUBROUTINE DECLARES                                     */
+ /*-------------------------------------------------------------------*/
+ %INCLUDE BOOL;
+ %INCLUDE ADDIDEP;
+ %INCLUDE DTEDIT;
+ %INCLUDE DTADJLD;   /* ADJUST A JULIAN DATE BY DELTA NUMBER OF DAYS  */
+ %INCLUDE DTADJLM;   /* ADJUST A JULIAN DATE BY DELTA NUMBER OF MONTHS*/
+ %INCLUDE CALCNCD;
+ %INCLUDE DTFSDT6;   /* SYSTEM DATE CCYYJJJ                           */
+ %INCLUDE DSSMPB3;
+ %INCLUDE GETMSCD;
+ /*-------------------------------------------------------------------*/
+ /*  MISC DECLARES                                                    */
+ /*-------------------------------------------------------------------*/
+ DCL 1 WS                  STATIC,
+       2 I                 FIXED BIN(31),
+       2 NULL_AREA         CHAR(56),
+       2 R_C               BIT(1),
+       2 TODAY             FIXED DEC(7),
+       2 THIS_IS_AN_ADD    BIT(1),
+       2 THIS_IS_A_PURGE   BIT(1),                                      C21482
+       2 I_AM_DEAD         BIT(1);
+
+ DCL  PIC_LNUM             PIC'(7)9';
+ DCL (PIC_EFDT,
+      PIC_SRDT)            PIC'(7)9' STATIC;
+
+ DCL  DEC_LNUM             FIXED DEC(7) INIT(0);
+ DCL (DEC_EFDT,
+      DEC_SRDT)            FIXED DEC(7) INIT(0);
+
+ DCL TMP_MSCD              CHAR(1) STATIC;
+ DCL TMP_MSDT              FIXED DEC (7,0) STATIC;
+ DCL IDEP_FLAG             BIT(1) INIT('0'B);
+ DCL FOTO_CANCEL           BIT(1) INIT(FALSE);
+
+ /*-------------------------------------------------------------------*/
+ /* MESSAGE         DECLARES                                          */
+ /*-------------------------------------------------------------------*/
+ DCL NO_LNUM               CHAR(79) STATIC INIT
+   ('DSSMPADP_001E - NO DRIVER NUMBER SENT WITH DATA');
+ DCL NO_NACD               CHAR(79) STATIC INIT
+   ('DSSMPADP_002E - NO NAME CODE SENT WITH DATA');
+ DCL NO_SECT               CHAR(79) STATIC INIT
+   ('DSSMPADP_003E - NO SECTION SENT WITH DATA');
+ DCL NO_NMCD               CHAR(79) STATIC INIT
+   ('DSSMPADP_004E - NO NEW MASTER STATUS SENT WITH DATA');
+ DCL NO_NECD               CHAR(79) STATIC INIT
+   ('DSSMPADP_005E - NO NEW EXPANDED STATUS SENT WITH DATA');
+ DCL NO_EFDT               CHAR(79) STATIC INIT
+   ('DSSMPADP_006E - NO EFFECTIVE DATE SENT WITH DATA');
+ DCL NO_SRDT               CHAR(79) STATIC INIT
+   ('DSSMPADP_007E - STATUS REVIEW DATE CANNOT BE CALCULATED');
+ DCL INVALID_LNUM          CHAR(70) STATIC INIT
+   ('DSSMPADP_008E - DRIVER NUMBER NON-NUMERIC: ');
+ DCL INVALID_EFDT          CHAR(70) STATIC INIT
+   ('DSSMPADP_009E - INVALID EFFECTIVE DATE: ');
+ DCL INVALID_SRDT          CHAR(70) STATIC INIT
+   ('DSSMPADP_010E - INVALID STATUS REVIEW DATE: ');
+ DCL LNUM_NOT_FOUND        CHAR(70) STATIC INIT
+   ('DSSMPADP_011E - DRIVER NUMBER NOT FOUND: ');
+ DCL LOGICALLY_DELETED     CHAR(70) STATIC INIT
+   ('DSSMPADP_012E - DSSM NUMBER LOGICALLY DELETED: ');
+ DCL NAME_CODE_MISMATCH    CHAR(65) STATIC INIT
+   ('DSSMPADP_013E - DSSM NUMBER/NAME CODE MISMATCH: ');
+ DCL INVALID_STATUS        CHAR(70) STATIC INIT
+   ('DSSMPADP_014E - INVALID STATUS CODE: ');
+ DCL DUPLICATE_KEY_STATUS  CHAR(70) STATIC INIT
+   ('DSSMPADP_015E - COULD NOT INSERT STATUS - DUPLICATE KEY');
+ DCL NO_ACTN               CHAR(70) STATIC INIT
+   ('DSSMPADP_016E - NO ACTION CODE SENT WITH DATA');
+ DCL INVALID_ACTN          CHAR(70) STATIC INIT
+   ('DSSMPADP_017E - INVALID ACTION CODE - MUST BE A, D, P OR Q');      C21482
+ DCL NO_KEY_DELETE         CHAR(70) STATIC INIT
+   ('DSSMPADP_018E - MUST SPECIFY EFDT AND SRDT ON DELETE ACTION');
+ DCL STATUS_EQUALS_EIGHT   CHAR(70) STATIC INIT
+   ('DSSMPADP_019E - CLIENT DECEASED');
+ DCL CANNOT_DELETE         CHAR(70) STATIC INIT
+   ('DSSMPADP_020E - CANNOT DELETE STATUS - DOES NOT EXIST');
+ DCL CANNOT_PURGE          CHAR(70) STATIC INIT
+   ('DSSMPADP_021E - CANNOT PURGE STATUS - DOES NOT EXIST');
+ DCL EXPIRED_SRDT          CHAR(70) STATIC INIT
+   ('DSSMPADP_022E - SRDT ALREADY EXPIRED: ');
+
+ DCL EDITS_OKAY            CHAR(79) STATIC INIT
+   ('EDITS ARE OKAY');
+
+ DCL LNUM_NACD_VALD        CHAR(79) STATIC INIT
+   ('LNUM_NACD_VALID');
+
+ DCL STATUS_VALD           CHAR(79) STATIC INIT
+   ('STATUS_VALID');
+
+ /*********************************************************************/
+ /* MAINLINE                                                          */
+ /* --------                                                          */
+ /* PROCESS INPUT MESSAGES UNTIL MESSAGE QUEUE IS DRAINED             */
+ /*********************************************************************/
+   CALL SET_UP();
+   CALL GU_IMS_MESSAGE();
+   DO WHILE (IO_PCB.STATCD = '  ') ;
+      CALL INITIALIZE;
+      CALL DSSMPADP_PROC;
+      CALL ISRT_IMS_MESSAGE;
+      CALL GN_IMS_MESSAGE;
+   END;
+ /*********************************************************************/
+ /* SET_UP                                                            */
+ /* ------                                                            */
+ /* SET THE COMMON VARS
+ /*********************************************************************/
+ SET_UP: PROC;
+    COMMON.IO_PCB_ADDR    = IO_PCB_PTR;
+    COMMON.EX_PCB_ADDR    = EX_PCB_PTR;
+    COMMON.AL_PCB_ADDR    = AL_PCB_PTR;
+    COMMON.PGMID          = 'DSSMPADP';
+    COMMON.DLI_CALLS      = 0;
+    COMMON.VALID_STAT     = '';
+    COMMON.DB2_TERMECB    = 0;
+ END SET_UP;
+
+ /*********************************************************************/
+ /* INITIALIZE                                                        */
+ /* ----------                                                        */
+ /* INITIALIZE DATES AND LENGTHS                                      */
+ /*********************************************************************/
+ INITIALIZE: PROC;
+    WS                    = '';
+    DSSMOADP              = '';
+    DSSMOADP.LL           = STORAGE(DSSMOADP) - 2;
+    DSSMOADP.ZZ           = 0;
+    DSSMOADP.TRAN         = DSSMIADP.TRAN;
+    TODAY                 = DTFSDT6();
+ END INITIALIZE;
+
+
+ /*********************************************************************/
+ /* DSSMPADP_PROC                                                     */
+ /* -------------                                                     */
+ /* MAIN PROCESSING ROUTINE                                           */
+ /*********************************************************************/
+ DSSMPADP_PROC: PROC;
+
+    /*----------------------------------------------------------------*/
+    /* IF ALL THE INPUT IS OK                                         */
+    /*----------------------------------------------------------------*/
+    IF EDITS_OK() & LNUM_NACD_VALID() & STATUS_VALID()
+    THEN
+       DO;
+          /*----------------------------------------------------------*/
+          /* IF THE CLIENT IS DEAD RETURN AN ERROR                    */
+          /*----------------------------------------------------------*/
+          IF I_AM_DEAD
+          THEN
+             DSSMOADP.SYSMSG = STATUS_EQUALS_EIGHT;
+          ELSE
+             SELECT(DSSMIADP.ACTN);
+
+                /*----------------------------------------------------*/
+                /* ACTION = ADD                                       */
+                /*----------------------------------------------------*/
+                WHEN('A')
+                   DO;
+                      /*----------------------------------------------*/
+                      /* IF ADDED SUCCESSFULLY CHANGE THE MASTER STAT */
+                      /*----------------------------------------------*/
+                      IF ADD_STATUS()
+                      THEN
+                         DO;
+                            CALL VI_CANDIDATE_CHECK(DSSMOADP.SECT,
+                                                    DSSMOADP.NMCD,
+                                                    DSSMOADP.NECD);
+                            CALL GET_MASTER_STATUS();                   C21482
+                            CALL CHANGE_MASTER_STATUS();                C21482
+                         END;
+                   END;
+
+                /*----------------------------------------------------*/C21482
+                /* ACTION = PURGE                                     */C21482
+                /*----------------------------------------------------*/C21482
+                WHEN('P')                                               C21482
+                   DO;
+                      /*----------------------------------------------*/C21482
+                      /* IF PURGED SUCCESSFULLY CHANGE MASTER STAT    */C21482
+                      /*----------------------------------------------*/C21482
+                      IF PURGE_STATUS()                                 C21482
+                      THEN                                              C21482
+                         DO;
+                            CALL GET_MASTER_STATUS();                   C21482
+                            CALL CHANGE_MASTER_STATUS();                C21482
+                         END;
+
+                   END;                                                 C21482
+
+                /*----------------------------------------------------*/
+                /* ACTION = DELETE                                    */
+                /*----------------------------------------------------*/
+                WHEN('D')
+                   DO;
+                      /*----------------------------------------------*/
+                      /* IF DELETED SUCCESSFULLY CHANGE THE MASTER ST */
+                      /*----------------------------------------------*/
+                      IF DELETE_STATUS()
+                      THEN
+                         DO;
+                            CALL GET_MASTER_STATUS();                   C21482
+                            CALL CHANGE_MASTER_STATUS();                C21482
+                         END;
+                   END;
+                WHEN('Q')
+                   DO;
+                      /*----------------------------------------------*/
+                      /* IF DELETED SUCCESSFULLY CHANGE THE MASTER ST */
+                      /*----------------------------------------------*/
+                      IF QUERY_STATUS()
+                      THEN;
+                   END;
+                OTHERWISE;
+             END;
+       END;
+ END DSSMPADP_PROC;
+
+ /*********************************************************************/
+ /* EDITS_OK                                                          */
+ /* --------                                                          */
+ /* CHECKS THE INPUT AND RETURNS 1 IF ALL OK                          */
+ /*********************************************************************/
+ EDITS_OK: PROC RETURNS(BIT(1));
+    DCL TMP_DEC      FIXED DEC(5);
+    DCL TMP_PIC      PIC'(5)9';
+    DCL STATUS_CODE  CHAR(06) INIT('');
+
+    R_C = '0'B;
+    DSSMOADP.DATA = DSSMIADP.DATA, BY NAME;
+    SELECT;
+       /*-------------------------------------------------------------*/
+       /* LNUM NOT BLANK                                      = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (DSSMOADP.LNUM = '')
+          DSSMOADP.SYSMSG = NO_LNUM;
+       /*-------------------------------------------------------------*/
+       /* NACD NOT BLANK                                      = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (DSSMOADP.NACD = '')
+          DSSMOADP.SYSMSG = NO_NACD;
+       /*-------------------------------------------------------------*/
+       /* SECT NOT BLANK                                      = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (DSSMOADP.SECT = '')
+          DSSMOADP.SYSMSG = NO_SECT;
+       /*-------------------------------------------------------------*/
+       /* NMCD NOT BLANK                                      = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (DSSMOADP.NMCD = '')
+          DSSMOADP.SYSMSG = NO_NMCD;
+       /*-------------------------------------------------------------*/
+       /* NECD NOT BLANK                                      = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (DSSMOADP.NECD = '')
+          DSSMOADP.SYSMSG = NO_NECD;
+       /*-------------------------------------------------------------*/
+       /* ACTN NOT BLANK                                      = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (DSSMOADP.ACTN = '')
+          DSSMOADP.SYSMSG = NO_ACTN;
+       /*-------------------------------------------------------------*/
+       /* ACTION NOT = 'A' OR 'D' OR 'P'                      = ERROR */C21482
+       /*-------------------------------------------------------------*/
+       WHEN (INDEX('ADPQ',DSSMOADP.ACTN) = 0)                           EDLP2
+          DSSMOADP.SYSMSG = INVALID_ACTN;
+       /*-------------------------------------------------------------*/
+       /* LNUM NOT NUMERIC                                    = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (VERIFY(DSSMOADP.LNUM,'1234567890') ^= 0)
+          DSSMOADP.SYSMSG = INVALID_LNUM || DSSMOADP.LNUM;
+       /*-------------------------------------------------------------*/
+       /* ACTION = 'D' AND EFDT OR SRDT NOT SPECIFIED         = ERROR */
+       /*-------------------------------------------------------------*/
+       WHEN (DSSMOADP.ACTN = 'D' &
+            (DSSMOADP.EFDT = '' | DSSMOADP.SRDT = ''))
+          DSSMOADP.SYSMSG = NO_KEY_DELETE;
+       WHEN (DSSMOADP.ACTN = 'P')                                       C21482
+          DO;                                                           C21482
+             THIS_IS_A_PURGE = (DSSMOADP.ACTN = 'P');                   C21482
+             R_C             = '1'B;                                    C21482
+             PIC_LNUM        = DSSMOADP.LNUM;                           C21482
+          END;                                                          C21482
+       WHEN (DSSMOADP.ACTN = 'Q')                                       EDLP2
+          DO;                                                           EDLP2
+             R_C             = '1'B;                                    EDLP2
+             PIC_LNUM        = DSSMOADP.LNUM;                           EDLP2
+          END;                                                          EDLP2
+       OTHERWISE
+          DO;
+             R_C = '1'B;
+             PIC_LNUM = DSSMOADP.LNUM;
+             THIS_IS_AN_ADD = (DSSMOADP.ACTN = 'A');
+             /*-------------------------------------------------------*/
+             /* EFDT DEFAULTS TO TODAY UNLESS SPECIFIED               */
+             /*-------------------------------------------------------*/
+             IF DSSMOADP.EFDT = ''
+             THEN
+                DEC_EFDT = TODAY;
+             ELSE
+                DO;
+                   PIC_EFDT = DSSMOADP.EFDT;
+                   DEC_EFDT = PIC_EFDT;
+                   DTEDIT_WORK              = '';                       EDLP2
+                   DTEDIT_WORK.JUL_INPUT_DATE = DEC_EFDT;               EDLP2
+                   DTEDIT_WORK.INPUT_FORMAT = '06';                     EDLP2
+                   IF ^DTEDIT(DTEDIT_PTR)                               EDLP2
+                   THEN                                                 EDLP2
+                      DO;                                               EDLP2
+                         DSSMOADP.SYSMSG = INVALID_EFDT ||
+                                           DSSMOADP.EFDT;
+                         R_C = '0'B;
+                         DEC_EFDT = 0;
+                      END;
+                END;
+             /*-------------------------------------------------------*/
+             /* SRDT IS CALCULATED UNLESS SPECIFIED                   */
+             /*-------------------------------------------------------*/
+             IF DSSMOADP.SRDT = ''
+             THEN
+             DO;
+                STATUS_CODE = DSSMOADP.SECT ||                            IDEP
+                              DSSMOADP.NMCD ||                            IDEP
+                              DSSMOADP.NECD;                              IDEP
+                /* IDEP STATUSES */
+                IF (STATUS_CODE = '31215A' |                              IDEP
+                    STATUS_CODE = '31215B' |                              IDEP
+                    STATUS_CODE = '31215C' |                              IDEP
+                    STATUS_CODE = '312152' |                              IDEP
+                    STATUS_CODE = '312514') &                             IDEP
+                   (DSSMOADP.SDUR = '' & DSSMOADP.DURU = '')              IDEP
+                THEN                                                      IDEP
+                   DEC_SRDT = 0;                                          IDEP
+                ELSE                                                      IDEP
+                /*----------------------------------------------------*/
+                /* DURATION INFO NOT SUPPLIED                 = ERROR */
+                /*----------------------------------------------------*/
+                IF DSSMOADP.SDUR = '' | DSSMOADP.DURU = ''
+                THEN
+                   DO;
+                      DSSMOADP.SYSMSG = NO_SRDT;
+                      R_C = '0'B;
+                   END;
+                ELSE
+                   DO;
+                      TMP_PIC = DSSMOADP.SDUR;
+                      TMP_DEC = TMP_PIC;
+                      SELECT (DSSMOADP.DURU);
+                        WHEN ('D') DO;
+                          DTADJLD_WORK.INPUT_DATA.INPUT_DT  = DEC_EFDT;
+                          DTADJLD_WORK.INPUT_DATA.DELTA_AMT = TMP_DEC;
+                          CALL DTADJLD (DTADJLD_PTR);
+                          DEC_SRDT = DTADJLD_WORK.OUTPUT_DATA.OUTPUT_DT;
+                        END;
+                        WHEN ('M') DO;
+                          DTADJLM_WORK.INPUT_DATA.INPUT_DT  = DEC_EFDT;
+                          DTADJLM_WORK.INPUT_DATA.DELTA_AMT = TMP_DEC;
+                          CALL DTADJLM (DTADJLM_PTR);
+                          DEC_SRDT = DTADJLM_WORK.OUTPUT_DATA.OUTPUT_DT;
+                        END;
+                        OTHERWISE;
+                      END;
+                      IF DEC_SRDT <= TODAY
+                      THEN                                              EDLP2
+                         DO;
+                            DSSMOADP.SYSMSG = INVALID_SRDT ||
+                                              DSSMOADP.SRDT;
+                            R_C = '0'B;
+                            DEC_SRDT = 0;
+                         END;
+                   END;
+             END;
+             ELSE
+                DO;
+                   PIC_SRDT = DSSMOADP.SRDT;
+                   DEC_SRDT = PIC_SRDT;
+                /*----------------------------------------------------*/
+                /* SRDT NOT NUMERIC                           = ERROR */
+                /*----------------------------------------------------*/
+                   DTEDIT_WORK              = '';                       EDLP2
+                   DTEDIT_WORK.JUL_INPUT_DATE = DEC_SRDT;               EDLP2
+                   DTEDIT_WORK.INPUT_FORMAT = '06';                     EDLP2
+                   IF ^DTEDIT(DTEDIT_PTR) |                             EDLP2
+                      DSSMOADP.EFDT >= DSSMOADP.SRDT |
+                      (DEC_SRDT <= TODAY)
+                   THEN                                                 EDLP2
+                      DO;
+                         DSSMOADP.SYSMSG = INVALID_SRDT ||
+                                           DSSMOADP.SRDT;
+                         R_C = '0'B;
+                         DEC_SRDT = 0;
+                      END;
+                END;
+          END;
+    END;
+    RETURN(R_C);
+
+ END EDITS_OK;
+
+ /*********************************************************************/
+ /* LNUM_NACD_VALID                                                   */
+ /* ---------------                                                   */
+ /* CHECKS THAT THE NAME CODE MATCHES THE LICENCE, RETURNS 1 IF OK    */
+ /*********************************************************************/
+ LNUM_NACD_VALID: PROC RETURNS(BIT(1));
+
+    R_C                  = '0'B;
+    DR1NAME_PTR          = ADDR(DR1MST_EOS);
+    DR1MST_SSAE.LNUM     = PIC_LNUM;
+    DR1MST_SSAE.CMD_CODE = 'DP-';
+    COMMON.VALID_STAT    = 'GE';
+
+    /*----------------------------------------------------------------*/
+    /* RETRIEVE THE DRIVER MASTER AND THE NAME SEGMENT                */
+    /*----------------------------------------------------------------*/
+    CALL MTRHDLI (COMMON,
+                  'DSSMPADP: GET DSSM MASTER AND NAME',
+                  FIVE,
+                  GU,
+                  DSDRPCB_PTR,
+                  DR1MST,
+                  DR1MST_SSAE,
+                  DR1NAME_SSAU);
+    DR1MST_SSAE.CMD_CODE = '---';
+
+    /*----------------------------------------------------------------*/
+    /* ERRORS = LNUM NOT FOUND                                        */
+    /*          LOGICALLY DELETED                                     */
+    /*          NAME CODE MISMATCH                                    */
+    /*          DEAD DRIVER                                           */
+    /*----------------------------------------------------------------*/
+    SELECT;
+      WHEN (DSDRPCB.STATCD ^= '  ')
+         DSSMOADP.SYSMSG = LNUM_NOT_FOUND || DSSMOADP.LNUM;
+      WHEN (DR1MST.DLET = '1')
+         DSSMOADP.SYSMSG = LOGICALLY_DELETED || DSSMOADP.LNUM;
+      WHEN (DSSMOADP.NACD ^= CALCNCD(DR1NAME.SURN))
+         DSSMOADP.SYSMSG =
+                  NAME_CODE_MISMATCH||DSSMOADP.LNUM||'/'||DSSMOADP.NACD;
+      OTHERWISE
+         DO;
+            R_C = '1'B;
+            I_AM_DEAD = (DR1MST.MSCD = '8');
+         END;
+    END;
+
+    RETURN(R_C);
+
+ END LNUM_NACD_VALID;
+
+ /*********************************************************************/
+ /* STATUS_VALID                                                      */
+ /* ------------                                                      */
+ /* RETURNS 1 IF THE PASSED STATUS ID VALID                           */
+ /*********************************************************************/
+ STATUS_VALID: PROC RETURNS(BIT(1));
+
+    DCL (F1,F2,F3)         CHAR(1);
+    DCL STAT_DESC          CHAR(45);
+
+    F1,F2,F3  = '';
+    STAT_DESC = '';
+    R_C       = '1'B;
+    /*----------------------------------------------------------------*/
+    /* DSSMPB3 WILL DETERMINE IF THE STATUS IS VALID                  */
+    /*----------------------------------------------------------------*/
+    CALL DSSMPB3(COMMON,
+                 DSLNPCB_PTR,
+                 DSSMOADP.SECT||DSSMOADP.NMCD||DSSMOADP.NECD,
+                 F1,
+                 F2,
+                 F3,
+                 STAT_DESC);
+    IF (STAT_DESC = '')
+    THEN
+       DO;
+          R_C = '0'B;
+          SYSMSG = INVALID_STATUS||DSSMOADP.SECT||
+                    DSSMOADP.NMCD||DSSMOADP.NECD;
+       END;
+
+    RETURN(R_C);
+
+ END STATUS_VALID;
+
+ /*********************************************************************/
+ /* ADD_STATUS                                                        */
+ /* ----------                                                        */
+ /* ADD THE STATUS AND RETURN 1 IF SUCCESSFUL                         */
+ /*********************************************************************/
+ ADD_STATUS: PROC RETURNS(BIT(1));
+    DCL STATUS_CODE    CHAR(06) INIT('');                                  IDEP
+    DCL LICENCE#       FIXED BIN(31) INIT(0);                              IDEP
+    DCL RETURN_MESSAGE CHAR(79) INIT('');                                  IDEP
+
+    R_C = '1'B;
+    STATUS_CODE = DSSMOADP.SECT ||                                         IDEP
+                  DSSMOADP.NMCD ||                                         IDEP
+                  DSSMOADP.NECD;                                           IDEP
+    LICENCE# = PIC_LNUM;                                                   IDEP
+    SELECT(STATUS_CODE);                                                   IDEP
+       WHEN('31215A','31215B','31215C','312152','312514')                  IDEP
+          DO;                                                              IDEP
+             IF ADDIDEP(COMMON,                                            IDEP
+                        DSDRPCB_PTR,                                       IDEP
+                        LICENCE#,                                          IDEP
+                        STATUS_CODE,                                       IDEP
+                        TODAY,                                             IDEP
+                        DEC_EFDT,                                          IDEP
+                        DEC_SRDT,                                          IDEP
+                        DR1MST.STLI,
+                        FOTO_CANCEL,
+                        RETURN_MESSAGE)                                    IDEP
+             THEN                                                          IDEP
+                IDEP_FLAG = '1'B;                                          IDEP
+             ELSE                                                          IDEP
+                DO;                                                        IDEP
+                   DSSMOADP.SYSMSG = RETURN_MESSAGE;                       IDEP
+                   R_C = '0'B;                                             IDEP
+                END;                                                       IDEP
+          END;                                                             IDEP
+       OTHERWISE                                                           IDEP
+          DO;
+             DR1STAT = '';
+             DR1STAT.SECT = DSSMOADP.SECT;
+             DR1STAT.NMCD = DSSMOADP.NMCD;
+             DR1STAT.NECD = DSSMOADP.NECD;
+             DR1STAT.EFDT = DEC_EFDT;
+             DR1STAT.SRDT = DEC_SRDT;
+             DR1MST_SSAE.CMD_CODE = '---';
+             COMMON.VALID_STAT = 'II';
+
+    /*----------------------------------------------------------------*/
+    /* ADD THE NEW SEGMENT UNLESS IT IS A DUPLICATE KEY               */
+    /*----------------------------------------------------------------*/
+             CALL MTRHDLI (COMMON,
+                           'DSSMPADP: INSERT NEW STATUS SEGMENT',
+                           FIVE,
+                           ISRT,
+                           DSDRPCB_PTR,
+                           DR1STAT,
+                           DR1MST_SSAE,
+                           DR1STAT_SSAU);
+
+
+             IF DSDRPCB.STATCD = 'II'
+             THEN
+                DO;
+                   DSSMOADP.SYSMSG = DUPLICATE_KEY_STATUS;
+                   R_C = '0'B;
+                END;
+             END;
+          END;
+    RETURN(R_C);
+
+ END ADD_STATUS;
+
+
+ /*********************************************************************/
+ /* GET_MASTER_STATUS                                                 */
+ /* -----------------                                                 */
+ /* DETERMINE THE MASTER STATUS                                       */
+ /*********************************************************************/
+ GET_MASTER_STATUS: PROC;
+
+
+    DEC_LNUM  = PIC_LNUM;
+    /*----------------------------------------------------------------*/
+    /* GETMSCD DETERMINES THE MASTER STATUS                           */
+    /*----------------------------------------------------------------*/
+    CALL GETMSCD (COMMON,
+                  DSDRPCB_PTR,
+                  DEC_LNUM,
+                  TMP_MSCD,
+                  TMP_MSDT);
+
+ END GET_MASTER_STATUS;
+
+ /*********************************************************************/
+ /* CHANGE_MASTER_STATUS                                              */
+ /* --------------------                                              */
+ /* WRITE A NEW MASTER STATUS TO THE DRIVER SEGMENT                   */
+ /* AND CHANGE THE MICROFICHE DATE AND CODE                           */
+ /*********************************************************************/
+ CHANGE_MASTER_STATUS: PROC;
+
+    DR1MST = '';
+    DR1MST_SSAE.LNUM     = PIC_LNUM;
+    DR1MST_SSAE.CMD_CODE = '---';
+    COMMON.VALID_STAT    = 'GE';
+    /*----------------------------------------------------------------*/
+    /* GET AND HOLD THE MASTER FOR THE DRIVER                         */
+    /*----------------------------------------------------------------*/
+    CALL MTRHDLI (COMMON,
+                  'DSSMPADP: GET DRIVER MASTER SEGMENT',
+                  FOUR,
+                  GHU,
+                  DSDRPCB_PTR,
+                  DR1MST,
+                  DR1MST_SSAE);
+
+    /*----------------------------------------------------------------*/
+    /* IF THE CURRENT STATUS IS DIFFERENT FROM THE CALCULATED ONE     */
+    /* OR THE LICENCE INDICATOR = 7                                   */
+    /*----------------------------------------------------------------*/
+    IF (DR1MST.MSCD ^= TMP_MSCD)
+    THEN
+       DO;
+          DR1MST.MSCD = TMP_MSCD;
+          DR1MST.MSDT = TODAY;
+          IF DR1MST.STLI = '7'
+          THEN
+             DR1MST.STLI = '6';
+       END;
+    /*----------------------------------------------------------------*/
+    /* CHANGE THE MICROFICHE CHANGE  DATE AND CODE                    */
+    /* CANNOT CANCEL A LICENCE IF NO PHOTO RECORD, OR LICENCE IS      */
+    /* ALREADY CANCELLED OR CLIENT STUB OR UNLICENSED                 */
+    /*----------------------------------------------------------------*/
+    IF IDEP_FLAG &                                                         IDEP
+       DR1MST.STLI > '0' & DR1MST.STLI < '6' &                             IDEP
+      ((DR1MST.RRDT = 0 & DR1MST.STLI = '5' & FOTO_CANCEL) |
+        DR1MST.RRDT > 0)                                                   IDEP
+    THEN                                                                   IDEP
+       DO;                                                                 IDEP
+          DR1MST.STLI    = '0';                                            IDEP
+          DR1MST.RRDT    = 0;                                              IDEP
+          DR1MST.MCCD    = 003;                                            IDEP
+          DR1MST.MCDT    = TODAY;                                          IDEP
+          DR1MST.LCDT    = DEC_EFDT;                                       IDEP
+       END;                                                                IDEP
+    ELSE                                                                   IDEP
+       DO;                                                                 IDEP
+          DR1MST.MCDT = TODAY;                                             IDEP
+          IF THIS_IS_AN_ADD                                                IDEP
+          THEN                                                             IDEP
+             DR1MST.MCCD = 060;                                            IDEP
+          ELSE                                                             IDEP
+             DR1MST.MCCD = 061;                                            IDEP
+       END;                                                                IDEP
+    COMMON.VALID_STAT = '  ';
+    CALL MTRHDLI (COMMON,
+                  'DSSMPADP: REPLACE DRIVER MASTER SEGMENT',
+                  THREE,
+                  REPL,
+                  DSDRPCB_PTR,
+                  DR1MST);
+
+ END CHANGE_MASTER_STATUS;
+1/*********************************************************************/
+ /* DELETE_STATUS                                                     */
+ /* -------------                                                     */
+ /* DELETE THE STATUS ON A WHOLE KEY MATCH, RETURNS 1 IF SUCCESSFUL   */
+ /*********************************************************************/
+ DELETE_STATUS: PROC RETURNS(BIT(1));
+    R_C = '1'B;
+    DR1STAT = '';
+    DR1STAT_SSAE.SECT = DSSMOADP.SECT;
+    DR1STAT_SSAE.NMCD = DSSMOADP.NMCD;
+    DR1STAT_SSAE.NECD = DSSMOADP.NECD;
+    DR1STAT_SSAE.EFDT = DEC_EFDT;
+    DR1STAT_SSAE.SRDT = DEC_SRDT;
+    DR1MST_SSAE.LNUM     = PIC_LNUM;
+    DR1MST_SSAE.CMD_CODE = '---';
+    COMMON.VALID_STAT       = 'GE';
+    CALL MTRHDLI (COMMON,
+                  'DSSMPADP: GET HOLD STATUS',
+                  FIVE,
+                  GHU,
+                  DSDRPCB_PTR,
+                  DR1STAT,
+                  DR1MST_SSAE,
+                  DR1STAT_SSAE);
+
+    IF DSDRPCB.STATCD = 'GE'
+    THEN
+       DO;
+          DSSMOADP.SYSMSG = CANNOT_DELETE;
+          R_C = '0'B;
+       END;
+    ELSE
+       DO;
+          COMMON.VALID_STAT = '  ';
+          CALL MTRHDLI (COMMON,
+                        'DSSMPADP: DELETE STATUS',
+                        THREE,
+                        DLET,
+                        DSDRPCB_PTR,
+                        DR1STAT);
+       END;
+    RETURN(R_C);
+ END DELETE_STATUS;
+1/*********************************************************************/
+ /* QUERY_STATUS                                                      */
+ /* -------------                                                     */
+ /* QUERY STATUS, RETURNS 1 IF SUCCESSFUL                             */
+ /*********************************************************************/
+ QUERY_STATUS: PROC RETURNS(BIT(1));
+ DCL (EFDT_PIC, SRDT_PIC) PIC'(7)9' INIT(0);
+    R_C = '1'B;
+    DR1STAT = '';
+    DR1STAT_SSAXPND.CMD_CODE = 'L--';
+    DR1STAT_SSAXPND.SECT = DSSMOADP.SECT;
+    DR1STAT_SSAXPND.NMCD = DSSMOADP.NMCD;
+    DR1STAT_SSAXPND.NECD = DSSMOADP.NECD;
+    DR1MST_SSAE.LNUM     = PIC_LNUM;
+    DR1MST_SSAE.CMD_CODE = '---';
+    COMMON.VALID_STAT       = 'GE';
+    CALL MTRHDLI (COMMON,
+                  'DSSMPADP: GET UNIQUE STATUS',
+                  FIVE,
+                  GU,
+                  DSDRPCB_PTR,
+                  DR1STAT,
+                  DR1MST_SSAE,
+                  DR1STAT_SSAXPND);
+
+    IF DSDRPCB.STATCD = 'GE'
+    THEN
+       DO;
+          DSSMOADP.SYSMSG = 'DSSMOADP_001S: STATUS NOT FOUND';
+          R_C = '0'B;
+       END;
+    ELSE
+       DO;
+          R_C = '1'B;
+          EFDT_PIC = DR1STAT.EFDT;
+          SRDT_PIC = DR1STAT.SRDT;
+          DSSMOADP.EFDT = EFDT_PIC;
+          DSSMOADP.SRDT = SRDT_PIC;
+       END;
+    RETURN(R_C);
+ END QUERY_STATUS;
+
+ /*********************************************************************/C21482
+ /* PURGE_STATUS                                                      */C21482
+ /* ------------                                                      */C21482
+ /* DELETE THE STATUS ON A PARTIAL MATCH, RETURNS 1 IF SUCCESSFUL     */C21482
+ /*********************************************************************/C21482
+ PURGE_STATUS:  PROC RETURNS(BIT(1));                                   C21482
+
+
+    R_C                  = '1'B;                                        C21482
+    DR1STAT              = '';                                          C21482
+    DR1MST_SSAE.LNUM     = PIC_LNUM;                                    C21482
+    DR1MST_SSAE.CMD_CODE = '---';                                       C21482
+    COMMON.VALID_STAT    = 'GE';                                        C21482
+    CALL MTRHDLI (COMMON,                                               C21482
+                  'DSSMPADP: GET DRIVER',                               C21482
+                  FOUR,                                                 C21482
+                  GU,                                                   C21482
+                  DSDRPCB_PTR,                                          C21482
+                  DR1MST,
+                  DR1MST_SSAE);                                         C21482
+                                                                        C21482
+                                                                        C21482
+    /******************************************************************/C21482
+    /* DSSM   NOT FOUND, CANNOT PURGE                                 */C21482
+    /******************************************************************/C21482
+    IF DSDRPCB.STATCD = 'GE'                                            C21482
+    THEN                                                                C21482
+       DO;                                                              C21482
+          DSSMOADP.SYSMSG = CANNOT_PURGE;                               C21482
+          R_C = '0'B;                                                   C21482
+       END;                                                             C21482
+    ELSE                                                                C21482
+       DO;                                                              C21482
+          COMMON.VALID_STAT = 'GAGEGK';
+          CALL MTRHDLI (COMMON,                                         C21482
+                        'DSSMPADP: PURGE STATUS',                       C21482
+                        FIVE,                                           C21482
+                        GHNP,                                           C21482
+                        DSDRPCB_PTR,                                    C21482
+                        DR1STAT,                                        C21482
+                        DR1MST_SSAE,                                    C21482
+                        DR1STAT_SSAU);                                  C21482
+
+
+          /************************************************************/C21482
+          /* NO DR1STAT SEGMENT FOUND, CANNOT PURGE                   */C21482
+          /************************************************************/C21482
+          IF DSDRPCB.STATCD = 'GA' |                                    C21482
+             DSDRPCB.STATCD = 'GE' |                                    C21482
+             DSDRPCB.STATCD = 'GK'                                      C21482
+          THEN                                                          C21482
+             DO;                                                        C21482
+                DSSMOADP.SYSMSG = CANNOT_PURGE;                         C21482
+                R_C = '0'B;                                             C21482
+             END;                                                       C21482
+
+          DO WHILE (DSDRPCB.STATCD = '  ');                             C21482
+
+
+             IF DR1STAT.SECT   = DSSMOADP.SECT &                        C21482
+                DR1STAT.NMCD   = DSSMOADP.NMCD &                        C21482
+                DR1STAT.NECD   = DSSMOADP.NECD                          C21482
+             THEN                                                       C21482
+                DO;                                                     C21482
+                   COMMON.VALID_STAT = '  ';                            C21482
+                   CALL MTRHDLI (COMMON,                                C21482
+                                 'DSSMPADP: ERROR PURGE STATUS',        C21482
+                                 THREE,                                 C21482
+                                 DLET,                                  C21482
+                                 DSDRPCB_PTR,                           C21482
+                                 DR1STAT);                              C21482
+                END;                                                    C21482
+
+             COMMON.VALID_STAT = 'GAGEGK';
+             CALL MTRHDLI (COMMON,                                      C21482
+                           'DSSMPADP: ERROR GHNP STATUS',               C21482
+                           FIVE,                                        C21482
+                           GHNP,                                        C21482
+                           DSDRPCB_PTR,                                 C21482
+                           DR1STAT,                                     C21482
+                           DR1MST_SSAE,                                 C21482
+                           DR1STAT_SSAU);                               C21482
+          END;                                                          C21482
+       END;                                                             C21482
+                                                                        C21482
+                                                                        C21482
+    RETURN(R_C);                                                        C21482
+                                                                        C21482
+ END PURGE_STATUS;                                                      C21482
+                                                                        C21482
+1/*********************************************************************/
+ /* GET_IMS_MESSAGE                                                   */
+ /*********************************************************************/
+ GU_IMS_MESSAGE: PROC;
+   COMMON.VALID_STAT = 'GEQC';
+   CALL MTRHDLI (COMMON,
+                 'DSSMPADP: GET FIRST INPUT MESSAGE',
+                 THREE,
+                 GU,
+                 IO_PCB_PTR,
+                 MSGIN);
+ END GU_IMS_MESSAGE;
+1/*********************************************************************/
+ /* GN _IMS_MESSAGE                                                   */
+ /* -----------------                                                 */
+ /* GET NEXT IMS MESSAGE                                              */
+ /*********************************************************************/
+ GN_IMS_MESSAGE: PROC;
+   COMMON.VALID_STAT = 'GEQCQD';
+   CALL MTRHDLI (COMMON,
+                 'DSSMPADP: GET NEXT INPUT MESSAGE',
+                 THREE,
+                 GN,
+                 IO_PCB_PTR,
+                 MSGIN);
+ END GN_IMS_MESSAGE;
+1/*********************************************************************/
+ /* ISRTIMS_MESSAGE                                                   */
+ /* -----------------                                                 */
+ /* INSERT IMS MESSAGE                                                */
+ /*********************************************************************/
+ ISRT_IMS_MESSAGE: PROC;
+   COMMON.VALID_STAT = '  ';
+   CALL MTRHDLI (COMMON,
+                 'DSSMPADP: ISRT OUTPUT MESSAGE',
+                 THREE,
+                 ISRT,
+                 IO_PCB_PTR,
+                 MSGOUT);
+ END ISRT_IMS_MESSAGE;
+
+ /*********************************************************************/
+ /* VI_CANDIDATE_CHECK: REMOVE THE VI CANDIDATE EXPANDED STATUS       */
+ /* ------------------                                                */
+ /*********************************************************************/
+ VI_CANDIDATE_CHECK: PROC(SECT, NMCD, NECD);
+   DCL SECT CHAR(1);
+   DCL NMCD CHAR(1);
+   DCL NECD CHAR(4);
+   DCL PURGE_VI_CANDIDATE BIT(1) INIT(FALSE);
+   DCL DAO_SMSG CHAR(79) INIT('');
+   DCL 1 PURGE_STATUS,
+         %INCLUDE DRKSTAT;
+         2 EOS       CHAR(0);
+   DCL VI_LNUM FIXED BIN(31) INIT(0);
+
+   IF (SECT ^= '3') THEN RETURN;
+   PURGE_VI_CANDIDATE = (NMCD = '1') &
+                       ^(NECD = '11JP' | NECD = '1184' | NECD = '1191');
+   PURGE_VI_CANDIDATE |= (NMCD = '2');
+   PURGE_VI_CANDIDATE |= (NMCD = '3') &
+                         (NECD = '232A' |
+                          NECD = '232B' |
+                          NECD = '232C' |
+                          NECD = '232P' |
+                          NECD = '232Q' |
+                          NECD = '232R' |
+                          NECD = '232S' |
+                          NECD = '2324' |
+                          NECD = '2337');
+   IF (PURGE_VI_CANDIDATE) THEN DO;
+     VI_LNUM = PIC_LNUM;
+     PURGE_STATUS = '';
+     PURGE_STATUS.SECT = '3';
+     PURGE_STATUS.NMCD = '0';
+     PURGE_STATUS.NECD = '1041';
+     PURGE_STATUS.EFDT,
+     PURGE_STATUS.SRDT = 0;
+     IF ^(STATDAO(STATCMD.PURGE,
+                  VI_LNUM,
+                  PURGE_STATUS,
+                  DLIERR,
+                  DAO_SMSG)) THEN DO;
+       DSSMOADP.SYSMSG = DAO_SMSG;
+     END;
+   END;
+ END VI_CANDIDATE_CHECK;
+ END DSSMADP;

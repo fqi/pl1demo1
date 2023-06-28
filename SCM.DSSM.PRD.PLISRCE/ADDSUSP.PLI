@@ -1,0 +1,86 @@
+ /* ADDSUSP        : ADD SUSPENSION                                   */
+ /* OWNING SYSTEM  : DSSM <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /* PROGRAM OVERVIEW:                                                 */
+ /* THIS SUBROUTINE ADDS THE SUSPENSION TO THE DRIVER'S RECORD        */
+ /*                                                                   */
+ /*********************************************************************/
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2010-05-13 MMC           IDEP PROJECT                             */
+ /*********************************************************************/
+ ADDSUSP: PROC(COMMON,
+               DSDRPCB_PTR,
+               LICENCE#,
+               SUSP_CAUSE,
+               TODAY,
+               START_DATE,
+               REVIEW_DATE) REORDER;
+
+ DCL 1 COMMON CONNECTED,
+       %INCLUDE COMMON;
+ %INCLUDE DSDRPCB;
+ DCL LICENCE#                         FIXED BIN(31),
+     SUSP_CAUSE                       CHAR(06),
+     (TODAY,START_DATE,REVIEW_DATE)   FIXED DEC(7);
+ %INCLUDE DR1MST;
+ %INCLUDE DR1SUSP;
+ %INCLUDE STDPARM;
+ %INCLUDE MTRHDLI;
+   /*----------------------------------------------------------------*/
+   /* SUBROUTINE DECLARES
+   /*----------------------------------------------------------------*/
+
+ DCL ADDR       BUILTIN;
+
+    COMMON.VALID_STAT = 'II';
+    DR1MST_SSAE.LNUM  = LICENCE#;
+    DR1SUSP.ADDT      = TODAY;
+    DR1SUSP.DLDT      = 0;
+    DR1SUSP.SSDT      = START_DATE;
+    DR1SUSP.SCAS      = SUSP_CAUSE;
+    DR1SUSP.SRDT      = REVIEW_DATE;
+
+    CALL MTRHDLI (COMMON,
+                  'ADDSUSP: ISRT DR1SUSP',
+                  FIVE,
+                  ISRT,
+                  DSDRPCB_PTR,
+                  DR1SUSP,
+                  DR1MST_SSAE,
+                  DR1SUSP_SSAU);
+
+    IF (DSDRPCB.STATCD = 'II')
+    THEN
+       DO;
+          DR1SUSP_SSAE.SSDT = DR1SUSP.SSDT;
+          DR1SUSP_SSAE.SCAS = DR1SUSP.SCAS;
+          COMMON.VALID_STAT = '  ';
+          CALL MTRHDLI (COMMON,
+                        'ADDSUSP: GHU DR1SUSP',
+                        FIVE,
+                        GHU,
+                        DSDRPCB_PTR,
+                        DR1SUSP,
+                        DR1MST_SSAE,
+                        DR1SUSP_SSAE);
+
+                /*--------------------------------------------*/
+                /* LOGICALLY DELETED, SO REACTIVATE                 */
+                /*--------------------------------------------*/
+          IF (DR1SUSP.DLDT > 0)
+          THEN
+             DO;
+                DR1SUSP.SRDT      = REVIEW_DATE;
+                DR1SUSP.ADDT      = TODAY;
+                DR1SUSP.DLDT      = 0;
+                COMMON.VALID_STAT = '  ';
+                CALL MTRHDLI (COMMON,
+                              'ADDSUSP - REPL DR1SUSP',
+                              THREE,
+                              REPL,
+                              DSDRPCB_PTR,
+                              DR1SUSP);
+             END;
+       END;
+ END ADDSUSP;

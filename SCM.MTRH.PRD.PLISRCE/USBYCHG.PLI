@@ -1,0 +1,386 @@
+ /* USBYCHG - CHANGE USED BY ROW                                     */
+ /**********************  MAINTENANCE LOG  ***************************/
+ /********************************************************************/
+ /********************************************************************/
+ /*                                                                  */
+ /*   BY     DATE    RFS                  NOTES                      */
+ /*  ----  --------  ---  -------------------------------------------*/
+ /*  AGA   91-02-21       ALLOW CHANGE TO UREL COLUMN                */
+ /*  AGA   90-06-08       CHANGES FOR NEW USBY                       */
+ /*  DEK   90-05-16       ADDITION OF THE USBY.ALRT ELEMENT.         */
+ /*  AGA   89-12-12  C11  ORIGINAL                                   */
+ /*                                                                  */
+ /********************************************************************/
+ /********************************************************************/
+ /*********************************************************************/
+ /*                                                                   */
+ /*  THIS SUBROUTINE CAN BE CALLED BY ANY USING SYSTEM APPLICATION    */
+ /*  THAT WISHES TO CHANGE UREL, NOVW OR ALRT FOR A GIVEN
+ /*  CLNO/AREF/SYST/USAK/UREL                                         */
+ /*                                                                   */
+ /*  THIS SUBROUTINE EXPECTS THE FOLLOWING PARAMETERS:-               */
+ /*     DB2FILTER      ... DB2 FILTER NAME                            */
+ /*     COMMON_PTR     ... DB2 FILTER COMMON AREA POINTER             */
+ /*     PARM_CLNO      ... CLIENT NUMBER                              */
+ /*     PARM_AREF      ... ADDRESS REFERENCE                          */
+ /*     PARM_SYST      ... USING SYSTEM IDENTIFIER                    */
+ /*     PARM_USAK      ... USING SYSTEM ACCESS KEY                    */
+ /*     PARM_UREL      ... USING SYSTEM RELATIONSHIP TYPE             */
+ /*     PARM_USID      ... USER ID                                    */
+ /*     PARM_NEW_UREL  ... NEW USING SYSTEM RELATIONSHIP TYPE         */
+ /*                        = IMPLIES DO NOT CHANGE THE VALUE          */
+ /*     PARM_NEW_NOVW  ... NEW NO VIEW TO CLIENT VALUE,               */
+ /*                        = IMPLIES DO NOT CHANGE THE VALUE          */
+ /*     PARM_NEW_ALRT  ... NEW ALERT INDICATOR VALUE                  */
+ /*                        = IMPLIES DO NOT CHANGE THE VALUE          */
+ /*     PARM_EMSG      ... RETURN CODE MESSAGE                        */
+ /*                                                                   */
+ /*  THIS SUBROUTINE RETURNS +000 IF USBY ROW SUCCESSFULLY UPDATED    */
+ /*  THIS SUBROUTINE RETURNS +100 IF USBY ROW NOT FOUND               */
+ /*  THIS SUBROUTINE RETURNS -803 IF USBY ROW UPDATE RESULTS IN       */
+ /*                               DUPLICATE PRIMARY KEY               */
+ /*                                                                   */
+ /*********************************************************************/
+ USBYCHG: PROC(DB2FILTER,       /* DB2 FILTER NAME                    */
+               COMMON_PTR,      /* DB2 FILTER COMMON AREA POINTER     */
+               PARM_CLNO,       /* CLIENT NUMBER                      */
+               PARM_AREF,       /* ADDRESS REFERENCE                  */
+               PARM_SYST,       /* USING SYSTEM IDENTIFIER            */
+               PARM_USAK,       /* USING SYSTEM ACCESS KEY            */
+               PARM_UREL,       /* USING SYSTEM RELATIONSHIP TYPE     */
+               PARM_USID,       /* USER ID                            */
+               PARM_NEW_UREL,   /* NEW USING SYSTEM RELATIONSHIP TYPE */
+               PARM_NEW_NOVW,   /* NEW NO VIEW TO CLIENT              */
+               PARM_NEW_ALRT,   /* NEW ALRT INDICATOR                 */
+               PARM_EMSG)       /* RETURN CODE MESSAGE                */
+          RETURNS(FIXED BIN(15))
+          REORDER
+          REDUCIBLE;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  PARAMETERS                                                       */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL DB2FILTER       CHAR(07);
+ DCL COMMON_PTR      POINTER;
+ DCL PARM_CLNO       FIXED BIN(31);
+ DCL PARM_AREF       CHAR(10);
+ DCL PARM_SYST       CHAR(04);
+ DCL PARM_USAK       CHAR(50) VARYING;
+ DCL PARM_UREL       CHAR(03);
+ DCL PARM_USID       CHAR(08);
+ DCL PARM_NEW_UREL   CHAR(03);
+ DCL PARM_NEW_NOVW   CHAR(01);
+ DCL PARM_NEW_ALRT   CHAR(01);
+ DCL PARM_EMSG       CHAR(79);
+1/*********************************************************************/
+ /*                                                                   */
+ /*  EXTERNAL ENTRIES                                                 */
+ /*                                                                   */
+ /*********************************************************************/
+ %INCLUDE EDTALRT;
+ %INCLUDE EDTNOVW;
+ %INCLUDE MTRHSQL;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  PL/1 BUILTIN FUNCTIONS                                           */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL ADDR           BUILTIN;
+ DCL INDEX          BUILTIN;
+ DCL NULL           BUILTIN;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  SQL COMMUNICATION AREA                                           */
+ /*                                                                   */
+ /*********************************************************************/
+ EXEC SQL INCLUDE SQLCA;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  DB2 TABLES, HOST VARIABLES AND NULL INDICATORS                   */
+ /*                                                                   */
+ /*********************************************************************/
+ EXEC SQL INCLUDE USBY;
+ EXEC SQL INCLUDE USBYAT;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  EDITTED UPDATE VALUES FOR USID, UREL, NOVW, AND ALRT             */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL 1 EDITTED,
+       5 USID     CHAR(08),
+       5 UREL     CHAR(03),
+       5 NOVW     CHAR(01),
+       5 ALRT     CHAR(01);
+1/*********************************************************************/
+ /*                                                                   */
+ /*  ERROR MESSAGE DECLARATIONS                                       */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL USBYCHG01E            CHAR(79) STATIC INIT
+   ('USBYCHG01E - PARM_NEW_UREL IS BLANK');
+ DCL USBYCHG02E            CHAR(79) STATIC INIT
+   ('USBYCHG02E - PARM_NEW_UREL IS INVALID');
+ DCL USBYCHG03E            CHAR(79) STATIC INIT
+   ('USBYCHG03E - PARM_NEW_NOVW IS BLANK');
+ DCL USBYCHG04E            CHAR(79) STATIC INIT
+   ('USBYCHG04E - PARM_NEW_ALRT IS BLANK');
+ DCL USBYCHG05E            CHAR(79) STATIC INIT
+   ('USBYCHG05E - NO CHANGES REQUESTED');
+ DCL USBYCHG06E            CHAR(79) STATIC INIT
+   ('USBYCHG06E - UPDATE USBY ALRT FAILED');
+ DCL USBYCHG07E            CHAR(79) STATIC INIT
+   ('USBYCHG07E - UPDATE USBY NOVW FAILED');
+ DCL USBYCHG08E            CHAR(79) STATIC INIT
+   ('USBYCHG08E - UPDATE USBY NOVW AND ALRT FAILED');
+ DCL USBYCHG09E            CHAR(79) STATIC INIT
+   ('USBYCHG09E - UPDATE USBY UREL FAILED');
+ DCL USBYCHG10E            CHAR(79) STATIC INIT
+   ('USBYCHG10E - UPDATE USBY UREL AND ALRT FAILED');
+ DCL USBYCHG11E            CHAR(79) STATIC INIT
+   ('USBYCHG11E - UPDATE USBY UREL AND NOVW FAILED');
+ DCL USBYCHG12E            CHAR(79) STATIC INIT
+   ('USBYCHG12E - UPDATE USBY UREL AND NOVW AND ALRT FAILED');
+ DCL USBYCHG13E            CHAR(79) STATIC INIT
+   ('USBYCHG13E - REQUESTED USBY ROW NOT FOUND');
+ DCL USBYCHG14E            CHAR(79) STATIC INIT
+   ('USBYCHG14E - REQUESTED USBY UPDATE RESULTS IN DUPLICATE KEY');
+
+ /*                                                                   */
+ /*  EDIT PARAMETERS                                                  */
+ /*                                                                   */
+ CALL EDIT_PARAMETERS;
+ IF PARM_EMSG ^= ' ' THEN
+    DO;
+
+       /*                                                             */
+       /*  PARAMETER EDIT FAILED - FORCE ROLB/ROLLBACK                */
+       /*                                                             */
+       SQLCODE = 100;
+       CALL MTRHSQL(DB2FILTER,COMMON_PTR,PARM_EMSG,' 000',SQLCA);
+    END;
+
+ /*                                                                   */
+ /*  UPDATE USID AND/OR UREL AND/OR NOVW AND/OR ALRT                  */
+ /*                                                                   */
+
+ IF PARM_NEW_UREL  = '='
+  & PARM_NEW_NOVW  = '='
+  & PARM_NEW_ALRT ^= '=' THEN
+    CALL UPDATE_USBY_ALRT;
+
+ IF PARM_NEW_UREL  = '='
+  & PARM_NEW_NOVW ^= '='
+  & PARM_NEW_ALRT  = '=' THEN
+    CALL UPDATE_USBY_NOVW;
+
+ IF PARM_NEW_UREL  = '='
+  & PARM_NEW_NOVW ^= '='
+  & PARM_NEW_ALRT ^= '=' THEN
+    CALL UPDATE_USBY_NOVW_ALRT;
+
+ IF PARM_NEW_UREL ^= '='
+  & PARM_NEW_NOVW  = '='
+  & PARM_NEW_ALRT  = '=' THEN
+    CALL UPDATE_USBY_UREL;
+
+ IF PARM_NEW_UREL ^= '='
+  & PARM_NEW_NOVW  = '='
+  & PARM_NEW_ALRT ^= '=' THEN
+    CALL UPDATE_USBY_UREL_ALRT;
+
+ IF PARM_NEW_UREL ^= '='
+  & PARM_NEW_NOVW ^= '='
+  & PARM_NEW_ALRT  = '=' THEN
+    CALL UPDATE_USBY_UREL_NOVW;
+
+ IF PARM_NEW_UREL ^= '='
+  & PARM_NEW_NOVW ^= '='
+  & PARM_NEW_ALRT ^= '=' THEN
+    CALL UPDATE_USBY_UREL_NOVW_ALRT;
+
+ /*                                                                   */
+ /*  RETURN SQLCODE OF 0, 100, OR -803                                */
+ /*                                                                   */
+ IF SQLCODE = 100 THEN
+    PARM_EMSG = USBYCHG13E;
+ IF SQLCODE = -803 THEN
+    PARM_EMSG = USBYCHG14E;
+ RETURN(SQLCODE);
+1/*********************************************************************/
+ /*                                                                   */
+ /*  EDIT THE PARAMETERS                                              */
+ /*                                                                   */
+ /*********************************************************************/
+ EDIT_PARAMETERS: PROC;
+
+ /*                                                                   */
+ /*  INITIALIZE                                                       */
+ /*                                                                   */
+ EDITTED = '';
+ PARM_EMSG = '';
+
+ /*                                                                   */
+ /*  EDIT USID                                                        */
+ /*                                                                   */
+ EDITTED.USID = PARM_USID;
+
+ /*                                                                   */
+ /*  EDIT NEW UREL                                                    */
+ /*                                                                   */
+ IF PARM_NEW_UREL = ' ' THEN
+    PARM_EMSG = USBYCHG01E;
+ ELSE
+    IF INDEX(PARM_NEW_UREL,'=') > 0 THEN
+       IF PARM_NEW_UREL = '=  ' THEN;
+       ELSE
+          PARM_EMSG = USBYCHG02E;
+    ELSE
+       EDITTED.UREL = PARM_NEW_UREL;
+
+ /*                                                                   */
+ /*  EDIT NEW NO VIEW TO CLIENT                                       */
+ /*                                                                   */
+ IF PARM_NEW_NOVW = ' ' THEN
+    PARM_EMSG = USBYCHG03E;
+ ELSE
+    IF PARM_NEW_NOVW = '=' THEN;
+    ELSE
+       IF EDTNOVW(PARM_NEW_NOVW,EDITTED.NOVW,PARM_EMSG) THEN;
+
+ /*                                                                   */
+ /*  EDIT ALERT INDICATOR                                             */
+ /*                                                                   */
+ IF PARM_NEW_ALRT = ' ' THEN
+    PARM_EMSG = USBYCHG04E;
+ ELSE
+    IF PARM_NEW_ALRT = '=' THEN;
+    ELSE
+       IF EDTALRT(PARM_NEW_ALRT,EDITTED.ALRT,PARM_EMSG) THEN;
+
+ /*                                                                   */
+ /*  EDIT NEW_UREL, NEW_NOVW, NEW_ALRT COMBINATION                    */
+ /*                                                                   */
+ IF PARM_NEW_UREL = '=  '
+  & PARM_NEW_NOVW = '='
+  & PARM_NEW_ALRT = '=' THEN
+    PARM_EMSG = USBYCHG05E;
+ END EDIT_PARAMETERS;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  UPDATE USBY ALRT                                                 */
+ /*                                                                   */
+ /*********************************************************************/
+ UPDATE_USBY_ALRT: PROC;
+ EXEC SQL UPDATE USBY
+          SET    USID = :EDITTED.USID,
+                 ALRT = :EDITTED.ALRT
+          WHERE  CLNO = :PARM_CLNO
+          AND    AREF = :PARM_AREF
+          AND    SYST = :PARM_SYST
+          AND    USAK = :PARM_USAK
+          AND    UREL = :PARM_UREL;
+ CALL MTRHSQL(DB2FILTER,COMMON_PTR,USBYCHG06E,' 000 100',SQLCA);
+ END UPDATE_USBY_ALRT;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  UPDATE USBY NOVW                                                 */
+ /*                                                                   */
+ /*********************************************************************/
+ UPDATE_USBY_NOVW: PROC;
+ EXEC SQL UPDATE USBY
+          SET    USID = :EDITTED.USID,
+                 NOVW = :EDITTED.NOVW
+          WHERE  CLNO = :PARM_CLNO
+          AND    AREF = :PARM_AREF
+          AND    SYST = :PARM_SYST
+          AND    USAK = :PARM_USAK
+          AND    UREL = :PARM_UREL;
+ CALL MTRHSQL(DB2FILTER,COMMON_PTR,USBYCHG07E,' 000 100',SQLCA);
+ END UPDATE_USBY_NOVW;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  UPDATE USBY NOVW AND ALRT                                        */
+ /*                                                                   */
+ /*********************************************************************/
+ UPDATE_USBY_NOVW_ALRT: PROC;
+ EXEC SQL UPDATE USBY
+          SET    USID = :EDITTED.USID,
+                 NOVW = :EDITTED.NOVW,
+                 ALRT = :EDITTED.ALRT
+          WHERE  CLNO = :PARM_CLNO
+          AND    AREF = :PARM_AREF
+          AND    SYST = :PARM_SYST
+          AND    USAK = :PARM_USAK
+          AND    UREL = :PARM_UREL;
+ CALL MTRHSQL(DB2FILTER,COMMON_PTR,USBYCHG08E,' 000 100',SQLCA);
+ END UPDATE_USBY_NOVW_ALRT;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  UPDATE USBY UREL                                                 */
+ /*                                                                   */
+ /*********************************************************************/
+ UPDATE_USBY_UREL: PROC;
+ EXEC SQL UPDATE USBY
+          SET    USID = :EDITTED.USID,
+                 UREL = :EDITTED.UREL
+          WHERE  CLNO = :PARM_CLNO
+          AND    AREF = :PARM_AREF
+          AND    SYST = :PARM_SYST
+          AND    USAK = :PARM_USAK
+          AND    UREL = :PARM_UREL;
+ CALL MTRHSQL(DB2FILTER,COMMON_PTR,USBYCHG09E,' 000 100-803',SQLCA);
+ END UPDATE_USBY_UREL;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  UPDATE USBY UREL AND ALRT                                        */
+ /*                                                                   */
+ /*********************************************************************/
+ UPDATE_USBY_UREL_ALRT: PROC;
+ EXEC SQL UPDATE USBY
+          SET    USID = :EDITTED.USID,
+                 UREL = :EDITTED.UREL,
+                 ALRT = :EDITTED.ALRT
+          WHERE  CLNO = :PARM_CLNO
+          AND    AREF = :PARM_AREF
+          AND    SYST = :PARM_SYST
+          AND    USAK = :PARM_USAK
+          AND    UREL = :PARM_UREL;
+ CALL MTRHSQL(DB2FILTER,COMMON_PTR,USBYCHG10E,' 000 100-803',SQLCA);
+ END UPDATE_USBY_UREL_ALRT;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  UPDATE USBY UREL AND NOVW                                        */
+ /*                                                                   */
+ /*********************************************************************/
+ UPDATE_USBY_UREL_NOVW: PROC;
+ EXEC SQL UPDATE USBY
+          SET    USID = :EDITTED.USID,
+                 UREL = :EDITTED.UREL,
+                 NOVW = :EDITTED.NOVW
+          WHERE  CLNO = :PARM_CLNO
+          AND    AREF = :PARM_AREF
+          AND    SYST = :PARM_SYST
+          AND    USAK = :PARM_USAK
+          AND    UREL = :PARM_UREL;
+ CALL MTRHSQL(DB2FILTER,COMMON_PTR,USBYCHG11E,' 000 100-803',SQLCA);
+ END UPDATE_USBY_UREL_NOVW;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  UPDATE USBY UREL AND NOVW AND ALRT                               */
+ /*                                                                   */
+ /*********************************************************************/
+ UPDATE_USBY_UREL_NOVW_ALRT: PROC;
+ EXEC SQL UPDATE USBY
+          SET    USID = :EDITTED.USID,
+                 UREL = :EDITTED.UREL,
+                 NOVW = :EDITTED.NOVW,
+                 ALRT = :EDITTED.ALRT
+          WHERE  CLNO = :PARM_CLNO
+          AND    AREF = :PARM_AREF
+          AND    SYST = :PARM_SYST
+          AND    USAK = :PARM_USAK
+          AND    UREL = :PARM_UREL;
+ CALL MTRHSQL(DB2FILTER,COMMON_PTR,USBYCHG12E,' 000 100-803',SQLCA);
+ END UPDATE_USBY_UREL_NOVW_ALRT;
+ END USBYCHG;

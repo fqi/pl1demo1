@@ -1,0 +1,58 @@
+ /* FINDPCB  CLSMVS: RETRIEVE A PCB'S POINTER                         */
+ /* OWNING SYSTEM  : MTRH - COMMON                                    */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2005-03-10 JZ   DDIP     ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* MAKES AN AIB INQY CALL TO FIND THE ADDRESS OF A PCB, RETURNS NULL */
+ /* IF THERE IS AN ERROR                                              */
+ /*                                                                   */
+ /*********************************************************************/
+ FINDPCB: PROC(PCBNAME) RETURNS(POINTER)
+          REORDER;
+
+   /********************************************************************
+    * PARAMETER DECLARATIONS                                           *
+    *******************************************************************/
+   DCL PCBNAME                CHAR(08);
+
+   /********************************************************************
+    *  BUILTIN FUNCTIONS                                               *
+    *******************************************************************/
+   DCL ONCODE  BUILTIN;
+   DCL NULL    BUILTIN;
+   DCL STORAGE BUILTIN;
+   /********************************************************************
+    *  EXTERNAL ENTRIES                                                *
+    *******************************************************************/
+   DCL CEETDLI                ENTRY EXTERNAL OPTIONS(ASM,INTER);
+   %INCLUDE STDPARM;          /* STANDARD IMS DECLARATIONS            */
+   DCL INQY                   CHAR(04) STATIC INIT('INQY');
+   DCL PCB_PTR                POINTER;
+   /********************************************************************
+    *  APPLICATION INTERFACE BLOCK (AIB) STRUCTURE                     *
+    *******************************************************************/
+   DCL 1 AIB                  UNALIGNED,
+    %INCLUDE AIB;
+
+   AIB.AIBID    = 'DFSAIB  ';
+   AIB.AIBLEN   = STORAGE(AIB);
+   AIB.AIBSFUNC = 'FIND    ';
+   AIB.AIBRSNM1 = PCBNAME;
+
+   /*                                                                 *
+    *  ISSUE INQY TO FIND ADDRESS OF THE PCB                          *
+    *                                                                 */
+   CALL CEETDLI(TWO,INQY,AIB);
+   IF AIB.AIBRETRN = 0 THEN
+      PCB_PTR = AIB.AIBRSA1;
+   ELSE
+      PCB_PTR = NULL;
+   RETURN(PCB_PTR);
+ END FINDPCB;

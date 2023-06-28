@@ -1,0 +1,303 @@
+ /* DLIERR   CLSDB2: DLI ERROR HANDLER                                */
+ /* OWNING SYSTEM  : MTRH - COMMON                                    */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2006-02-16 NK   C15030   ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /*  HANDLES DB/DLI ERRORS                                            */
+ /*  - PERFORMS A ROLB TO ROLL BACK ANY DATABASE CHANGES              */
+ /*  - INSERTS AN ABEND SCREEN WITH DB PCB INFORMATION                */
+ /*  - SAVE ABEND INFORMATION TO MERR                                 */
+ /*  - IN THE CASE OF OF BATCH PROGRAM THE ABEND SCREEN IS WRITTEN    */
+ /*    TO THE MERR FILE                                               */
+ /*                                                                   */
+ /*********************************************************************/
+ DLIERR: PROC(SYSMSG,
+              DBPCB_PTR) REORDER;
+
+ /*------------------------------------------------------------------*/
+ /* INPUT PARAMETERS
+ /*------------------------------------------------------------------*/
+ DCL SYSMSG                CHAR(*);
+ DCL DBPCB_PTR             POINTER;
+ DCL 1 DBPCB               BASED(DBPCB_PTR),
+       %INCLUDE DBPCB;
+
+ /*------------------------------------------------------------------*/
+ /* IMS DECLARES
+ /*------------------------------------------------------------------*/
+ DCL IO_PCB_PTR             POINTER;
+ DCL 1 IO_PCB              BASED(IO_PCB_PTR),
+       %INCLUDE IOPCB;
+ %INCLUDE STDPARM;
+
+ /*------------------------------------------------------------------*/
+ /* ABEND SCREEN
+ /*------------------------------------------------------------------*/
+ DCL 1 SCREEN,
+       2 LL                FIXED BIN(31),
+       2 ZZ                FIXED BIN(15),
+       2 PGMID             CHAR(8),
+       2 STATUS            CHAR(2),
+       2 MESSAGE           CHAR(79),
+       2 DLI_CALLS         PIC 'ZZ9',
+       2 DBLTERM           CHAR(8),
+       2 SEGLVL            CHAR(2),
+       2 OPTION            CHAR(4),
+       2 SEGNAME           CHAR(8),
+       2 SENSEG            PIC '9999',
+       2 FUNC              CHAR(4),
+       2 VALIDCD           CHAR(20),
+       2 FBLEN             PIC '9999',
+       2 FBAREA            CHAR(60),
+       2 FILL              CHAR(840);
+
+ /*------------------------------------------------------------------*/
+ /* MESSAGE LINES
+ /*------------------------------------------------------------------*/
+ DCL 1 LINE1,
+       2 CC                CHAR(01) INIT('1'),
+       2 FILL2             CHAR(33) INIT
+        ('     APPLICATION ABEND     '),
+       2 DATEOUT           CHAR(09) INIT(' '),
+       2 FILL3             CHAR(03) INIT(' '),
+       2 TIMEOUT           CHAR(08) INIT(' '),
+       2 FILL4             CHAR(79) INIT(' ');
+ DCL 1 LINE2,
+       2 CC                CHAR(01) INIT(' '),
+       2 FILL2             CHAR(09) INIT('PROGRAM:'),
+       2 PGM               CHAR(13) INIT(' '),
+       2 FILL4             CHAR(13) INIT('STATUS CODE:'),
+       2 STATUS            CHAR(02) INIT(' '),
+       2 FILL5             CHAR(95) INIT(' ');
+ DCL 1 LINE3,
+       2 CC                CHAR(01) INIT(' '),
+       2 MESSAGE           CHAR(79) INIT(' '),
+       2 FILL2             CHAR(53) INIT(' ');
+ DCL 1 LINE4,
+       2 CC                CHAR(01) INIT(' '),
+       2 FILL2             CHAR(26) INIT
+        ('NUMBER OF DLI CALLS ISSUED'),
+       2 DLI_CALLS         PIC 'ZZZZZZ9' INIT(0),
+       2 FILL5             CHAR(99) INIT(' ');
+ DCL 1 LINE5,
+       2 CC                CHAR(01) INIT('0'),
+       2 FILL2             CHAR(47) INIT
+        ('DB/LTERM  STATUS  SEGLVL  OPTION        SEGNAME'),
+       2 FILL3             CHAR(85) INIT
+        ('   SENSEG FUNC  VALID CODE');
+ DCL 1 LINE6,
+       2 CC                CHAR(01) INIT(' '),
+       2 DBLTERM           CHAR(08) INIT(' '),
+       2 FILL2             CHAR(04) INIT(' '),
+       2 STATUS            CHAR(02) INIT(' '),
+       2 FILL3             CHAR(06) INIT(' '),
+       2 SEGLVL            CHAR(02) INIT(' '),
+       2 FILL4             CHAR(05) INIT(' '),
+       2 OPTION            CHAR(04) INIT(' '),
+       2 FILL5             CHAR(09) INIT(' '),
+       2 SEGNAME           CHAR(08) INIT(' '),
+       2 FILL6             CHAR(03) INIT(' '),
+       2 SENSEG            PIC 'ZZZ9' INIT('0'),
+       2 FILL7             CHAR(02) INIT(' '),
+       2 FUNC              CHAR(04) INIT(' '),
+       2 FILL8             CHAR(71) INIT(' ');
+ DCL 1 LINE7,
+       2 CC                CHAR(01) INIT(' '),
+       2 FILL1             CHAR(01) INIT(' '),
+       2 FILL2             CHAR(10) INIT('KEYFDBK:'),
+       2 FDBK              CHAR(60) INIT(' '),
+       2 FILL3             CHAR(61) INIT(' ');
+ DCL 1 LINE8,
+       2 CC                CHAR(01) INIT(' '),
+       2 FILL2             CHAR(05) INIT('LEN: '),
+       2 LEN               PIC 'ZZZ9' INIT('0'),
+       2 FILL3             CHAR(02) INIT(' '),
+       2 HX                CHAR(60) INIT(' '),
+       2 FILL4             CHAR(61) INIT(' ');
+
+ /*------------------------------------------------------------------*/
+ /* BUILTIN FUNCTIONS
+ /*------------------------------------------------------------------*/
+ DCL ADDR                  BUILTIN;
+ DCL DATE                  BUILTIN;
+ DCL NULL                  BUILTIN;
+ DCL ONCODE                BUILTIN;
+ DCL PLIDUMP               BUILTIN;
+ DCL STORAGE               BUILTIN;
+ DCL STRING                BUILTIN;
+ DCL SUBSTR                BUILTIN;
+ DCL TIME                  BUILTIN;
+
+ /*------------------------------------------------------------------*/
+ /* WORKING STORAGE
+ /*------------------------------------------------------------------*/
+ DCL MOD_NAME              CHAR(8) STATIC INIT('MTRHOE1 ');
+ DCL PGMID                 CHAR(8);
+
+ /*------------------------------------------------------------------*/
+ /* EXTERNAL ENTRIES
+ /*------------------------------------------------------------------*/
+ %INCLUDE FINDPCB;
+ DCL PLITDLI               EXT ENTRY;
+
+ /*------------------------------------------------------------------*/
+ /* SQL INCLUDES
+ /*------------------------------------------------------------------*/
+ EXEC SQL INCLUDE SQLCA;
+ EXEC SQL INCLUDE MERR;
+
+ /*------------------------------------------------------------------*/
+ /* ON ERROR BLOCK
+ /*------------------------------------------------------------------*/
+ ON ERROR BEGIN;
+   ON ERROR SYSTEM;
+   IF(ONCODE() = 84) THEN DO;
+     CALL PLIDUMP('TBCNFNHNB',
+                  'MTRHERR COULD NOT BE OPENED, '
+                  || 'LOOK IN DB2 TABLE:MERR FOR MORE INFO');
+   END;
+   ELSE DO;
+     CALL PLIDUMP('TBFH','ON ERROR CALLED');
+     CALL PLITDLI(ONE,ROLL);
+   END;
+   STOP;
+ END;
+
+1/*********************************************************************/
+ /*  MAINLINE
+ /*********************************************************************/
+ SQLCA = '';
+ IO_PCB_PTR = FINDPCB('IOPCB   ');
+ PGMID = IO_PCB.MODNAME;
+ CALL PLITDLI(TWO,
+              ROLB,
+              IO_PCB_PTR);
+ CALL FORMAT_MESSAGE();
+ CALL PLITDLI(FOUR,
+              ISRT,
+              IO_PCB_PTR,
+              SCREEN,
+              MOD_NAME);
+ CALL SETLINES();
+ SELECT(IO_PCB.STATCD);
+   WHEN('AL', 'QH') CALL BATCH_MESSAGE();
+   OTHERWISE;
+ END;
+ CALL INSERT_MERR();
+ STOP;
+
+1/*********************************************************************/
+ /*  FORMAT_MESSAGE:
+ /*********************************************************************/
+ FORMAT_MESSAGE: PROC;
+   SCREEN = '';
+   SCREEN.LL = STORAGE(SCREEN) - 2;
+   SCREEN.ZZ = 0;
+   SCREEN.PGMID = PGMID;
+   SCREEN.STATUS = DBPCB.STATCD;
+   IF(SYSMSG = ' ') THEN
+     SCREEN.MESSAGE = 'PROGRAM ABORTED DUE TO INVALID STATUS';
+   ELSE
+     SCREEN.MESSAGE = SYSMSG;
+   SCREEN.DLI_CALLS = '';
+   SCREEN.DBLTERM = DBPCB.DBDNAM;
+   SCREEN.SEGLVL = DBPCB.SEGLVL;
+   SCREEN.OPTION = DBPCB.OPTION;
+   SCREEN.SEGNAME = DBPCB.SEGNAM;
+   SCREEN.SENSEG = DBPCB.SENSEG;
+   SCREEN.FUNC = DBPCB.OPTION;
+   SCREEN.VALIDCD = '';
+   SCREEN.FBAREA = DBPCB.FBAREA;
+   SCREEN.FBLEN = DBPCB.FBLNG;
+   SCREEN.FILL = '';
+ END FORMAT_MESSAGE;
+
+1/*********************************************************************/
+ /* SEND ERROR TO A DB2 TABLE MERR                                    */
+ /*********************************************************************/
+ INSERT_MERR: PROC;
+   MERR_R.TRAN = PGMID;
+   MERR_R.ROUT = 'DLIERR';
+   MERR_R.CALL = DBPCB.OPTION;
+   MERR_R.RTCD = SCREEN.STATUS;
+   MERR_R.RSCD = DBPCB.SEGNAM;
+   MERR_R.EMSG = SYSMSG;
+   MERR_R.SCRN = SUBSTR(STRING(LINE1), 2, 80);
+   MERR_R.SCRN = MERR_R.SCRN || SUBSTR(STRING(LINE2), 2, 80);
+   MERR_R.SCRN = MERR_R.SCRN || SUBSTR(STRING(LINE3), 2, 80);
+   MERR_R.SCRN = MERR_R.SCRN || SUBSTR(STRING(LINE4), 2, 80);
+   MERR_R.SCRN = MERR_R.SCRN || SUBSTR(STRING(LINE5), 2, 80);
+   MERR_R.SCRN = MERR_R.SCRN || SUBSTR(STRING(LINE6), 2, 80);
+   MERR_R.SCRN = MERR_R.SCRN || SUBSTR(STRING(LINE7), 2, 80);
+   MERR_R.SCRN = MERR_R.SCRN || SUBSTR(STRING(LINE8), 2, 80);
+
+   EXEC SQL
+      INSERT
+      INTO   MERR
+            (PATS,
+              TRAN,
+              ROUT,
+              CALL,
+              RTCD,
+              RSCD,
+              EMSG,
+              SCRN)
+      VALUES(CURRENT TIMESTAMP,
+              :MERR_R.TRAN,
+              :MERR_R.ROUT,
+              :MERR_R.CALL,
+              :MERR_R.RTCD,
+              :MERR_R.RSCD,
+              :MERR_R.EMSG,
+              :MERR_R.SCRN);
+ END INSERT_MERR;
+
+1/*********************************************************************/
+ /* BATCH_MESSAGE:
+ /*********************************************************************/
+ BATCH_MESSAGE: PROC;
+   DCL MTRHERR               OUTPUT RECORD FILE
+                             ENV(TOTAL,FB,CTLASA,RECSIZE(133));
+   WRITE FILE(MTRHERR) FROM(LINE1);
+   WRITE FILE(MTRHERR) FROM(LINE2);
+   WRITE FILE(MTRHERR) FROM(LINE3);
+   WRITE FILE(MTRHERR) FROM(LINE4);
+   WRITE FILE(MTRHERR) FROM(LINE5);
+   WRITE FILE(MTRHERR) FROM(LINE6);
+   WRITE FILE(MTRHERR) FROM(LINE7);
+   WRITE FILE(MTRHERR) FROM(LINE8);
+   CALL PLITDLI(ONE,ROLL);
+ END BATCH_MESSAGE;
+
+1/*********************************************************************/
+ /*  SETLINES:
+ /*********************************************************************/
+ SETLINES: PROC;
+   DCL I  FIXED BIN(15);
+   LINE1.DATEOUT = DATE;
+   LINE1.TIMEOUT = TIME;
+   LINE2.PGM = PGMID;
+   LINE2.STATUS = DBPCB.STATCD;
+   IF(SYSMSG = ' ') THEN
+     LINE3.MESSAGE = 'PROGRAM ABORTED DUE TO INVALID STATUS';
+   ELSE
+     LINE3.MESSAGE = SYSMSG;
+   LINE4.DLI_CALLS = '';
+   LINE6.DBLTERM = DBPCB.DBDNAM;
+   LINE6.STATUS = DBPCB.STATCD;
+   LINE6.SEGLVL = DBPCB.SEGLVL;
+   LINE6.OPTION = DBPCB.OPTION;
+   LINE6.SEGNAME = DBPCB.SEGNAM;
+   LINE6.SENSEG = DBPCB.SENSEG;
+   LINE6.FUNC = DBPCB.OPTION;
+   LINE7.FDBK = DBPCB.FBAREA;
+   LINE8.LEN = DBPCB.FBLNG;
+ END SETLINES;
+ END DLIERR;

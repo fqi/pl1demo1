@@ -1,0 +1,108 @@
+ /* AIBSTR   CLSMVS: AIB STRING                                       */
+ /* OWNING SYSTEM  : MTRH - COMMON                                    */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2006-08-21 NK   C16752   ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /* RETURNS THE STRING REPRESENTATION OF THE AIB.                     */
+ /* THE STRING REPRESENTATION CONTAINS                                */
+ /*   1. THE AIB IDENTIFIER           AIB.AIBID)                      */
+ /*   2. THE AIB RESOURCE NAME #1     AIB.AIBRSNM1                    */
+ /*   3. THE DLI RETURN CODE (HEX)    AIB.AIBRETRN                    */
+ /*   4. THE DLI REASON CODE (HEX)    AIB.AIBREASN                    */
+ /*                                                                   */
+ /* @PARAM AIB                                                        */
+ /*   THE AIB MASK                                                    */
+ /*                                                                   */
+ /* @RETURNS CHAR(79)                                                 */
+ /*   THE STRING REPRESENTATION OF THE AIB                            */
+ /*                                                                   */
+ /*********************************************************************/
+ AIBSTR: PROC(AIB)
+         RETURNS(CHAR(79)) REORDER;
+   DCL 1 AIB UNALIGNED,
+   %INCLUDE AIB;
+
+   DCL ADDR   BUILTIN;
+   DCL SUBSTR BUILTIN;
+
+   DCL AIB_STRING CHAR(79);
+   AIB_STRING =
+     'AIBçID=' || AIB.AIBID ||
+     ',RSNM1=' || AIB.AIBRSNM1 ||
+     ',RETRN=' || HEXSTR(AIB.AIBRETRN) ||
+     ',REASN=' || HEXSTR(AIB.AIBREASN) ||
+     'Ÿ';
+   RETURN (AIB_STRING);
+
+1/*********************************************************************/
+ /*  HEXSTR:
+ /*********************************************************************/
+ HEXSTR: PROC(HEX_VALUE) RETURNS(CHAR(7));
+   DCL HEX_VALUE UNALIGNED FIXED BINARY(31,0);
+   DCL I       FIXED BINARY(31,0) INIT(0);
+   DCL MASK(8) BIT(4) BASED(ADDR(HEX_VALUE));
+   DCL HEX_CHAR CHAR(7) INIT('''    ''X');
+
+   DO I=5 TO 8;
+      SELECT (MASK(I));
+        WHEN ('0000'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '0';
+        END;
+        WHEN ('0001'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '1';
+        END;
+        WHEN ('0010'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '2';
+        END;
+        WHEN ('0011'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '3';
+        END;
+        WHEN ('0100'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '4';
+        END;
+        WHEN ('0101'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '5';
+        END;
+        WHEN ('0110'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '6';
+        END;
+        WHEN ('0111'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '7';
+        END;
+        WHEN ('1000'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '8';
+        END;
+        WHEN ('1001'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = '9';
+        END;
+        WHEN ('1010'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = 'A';
+        END;
+        WHEN ('1011'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = 'B';
+        END;
+        WHEN ('1100'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = 'C';
+        END;
+        WHEN ('1101'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = 'D';
+        END;
+        WHEN ('1110'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = 'E';
+        END;
+        WHEN ('1111'B) DO;
+          SUBSTR(HEX_CHAR,I-3,1) = 'F';
+        END;
+        OTHERWISE DO;
+        END;
+      END;
+   END;
+   RETURN (HEX_CHAR);
+ END HEXSTR;
+ END AIBSTR;

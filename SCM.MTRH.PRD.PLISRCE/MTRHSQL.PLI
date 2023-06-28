@@ -1,0 +1,91 @@
+ /* MTRHSQL - DB2 SQLCODE ANALIZER                                   */
+ /**********************  MAINTENANCE LOG  ***************************/
+ /********************************************************************/
+ /********************************************************************/
+ /*                                                                  */
+ /*   BY     DATE    RFS                  NOTES                      */
+ /*  ----  --------  ---  -------------------------------------------*/
+ /*        18JUN08 AMTI    : ENTERPRISE PL/I CHANGES              JZIE*/
+ /*  AGA   89-12-13  C11  ORIGINAL                                   */
+ /*                                                                  */
+ /********************************************************************/
+ /********************************************************************/
+ /*********************************************************************/
+ /*                                                                   */
+ /*  THIS SUBROUTINE CAN BE INVOKED BY ANY PROGRAM THAT ACCESSES DB2  */
+ /*  DATABASES TO ANALIZE THE SQLCODE.                                */
+ /*                                                                   */
+ /*********************************************************************/
+ MTRHSQL: PROC (DB2_FILTER_NAME, /* DB2 FILTER NAME                   */
+                COMMON_PTR,      /* DB2 FILTER COMMON AREA POINTER    */
+                USER_MSG,        /* USER ROLL MESSAGE                 */
+                VALID_SQLCODES,  /* VALID SQLCODES                    */
+                SQLCA)           /* SQL COMMUNICATION AREA            */
+                REORDER
+                REDUCIBLE;
+ /*********************************************************************/
+ /*                                                                   */
+ /*  PARAMETERS                                                       */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL DB2_FILTER_NAME       CHAR (07);
+ DCL COMMON_PTR            POINTER;
+ DCL USER_MSG              CHAR (*);
+ DCL VALID_SQLCODES        CHAR (20);
+ DCL 1 SQLCA               CONNECTED,                                   00090000
+       2 SQLCAID           CHAR (8),                                    00100000
+       2 SQLCABC           FIXED BIN (31),                              00110000
+       2 SQLCODE           FIXED BIN (31),                              00120000
+       2 SQLERRM           CHAR (70) VARYING,                           00130000
+       2 SQLERRP           CHAR (8),                                    00140000
+       2 SQLERRD (6)       FIXED BIN (31),                              00150000
+       2 SQLWARN,                                                       00160000
+         3 SQLWARN0        CHAR (1),                                    00170000
+         3 SQLWARN1        CHAR (1),                                    00180000
+         3 SQLWARN2        CHAR (1),                                    00190000
+         3 SQLWARN3        CHAR (1),                                    00200000
+         3 SQLWARN4        CHAR (1),                                    00210000
+         3 SQLWARN5        CHAR (1),                                    00220000
+         3 SQLWARN6        CHAR (1),                                    00230000
+         3 SQLWARN7        CHAR (1),                                    00240000
+       2 SQLEXT            CHAR (8);                                    00250000
+ /*********************************************************************/
+ /*                                                                   */
+ /*  EXTERNAL ENTRIES                                                 */
+ /*                                                                   */
+ /*********************************************************************/
+ %INCLUDE MTRDB2B;
+ %INCLUDE MTRHDB2;
+ /*********************************************************************/
+ /*                                                                   */
+ /*  THE CALLING PROGRAMS COMMON AREA FOR MTRDB2B                     */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL 1 COMMDB2B        BASED (COMMON_PTR),
+       2 PGMID         CHAR (08),
+       2 VALID_STAT    CHAR (20);
+ /*********************************************************************/
+ /*                                                                   */
+ /*  THE CALLING PROGRAMS COMMON AREA FOR MTRHDB2                     */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL 1 COMMDB2         BASED (COMMON_PTR),
+ %INCLUDE COMMON;
+1/*********************************************************************/
+ /*                                                                   */
+ /*  MAIN PROCESS                                                     */
+ /*                                                                   */
+ /*********************************************************************/
+ SELECT (DB2_FILTER_NAME);
+    WHEN ('MTRDB2B')          /* DB2 PURE BATCH FILTER                */
+       DO;
+          COMMDB2B.VALID_STAT = VALID_SQLCODES;
+          CALL MTRDB2B (COMMDB2B,USER_MSG,SQLCA);
+       END;
+    WHEN ('MTRHDB2')          /* MPP AND BMP DB2 FILTER               */
+       DO;
+          COMMDB2.VALID_STAT = VALID_SQLCODES;
+          CALL MTRHDB2 (COMMDB2,USER_MSG,SQLCA);
+       END;
+ END;
+ END MTRHSQL;

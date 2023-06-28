@@ -1,0 +1,39 @@
+ /* DTFSDT6: CLSMVS: FUNCTION TO RETURN SYSTEM DATE IN CCYYJJJ FORMAT */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-03-20 HJB  C980241  CREATE                                   */
+ /* 1998-03-30 HJB  C980241  Q.A. CHANGES                             */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* RETRIEVE THE SYSTEM DATE IN CCYYJJJ FORMAT                        */
+ /*                                                                   */
+ /*********************************************************************/
+1DTFSDT6: PROC
+          RETURNS(FIXED DEC(7,0))
+          REORDER;
+1  /*----------------------------------------------------------------*/
+   /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+   /*----------------------------------------------------------------*/
+   DCL OUT_DATE                   FIXED DEC(7,0);
+   %INCLUDE DTSYSDT;
+   %INCLUDE DTFORMAT;
+   DCL ADDR                       BUILTIN;
+1  /*----------------------------------------------------------------*/
+   /*  MAINLINE
+   /*----------------------------------------------------------------*/
+   DTSYSDT_WORK = '';
+   DTSYSDT_WORK.OUTPUT_FORMAT = CCYYJJJ_PIC;
+   CALL DTSYSDT(DTSYSDT_PTR);
+   IF DTSYSDT_WORK.RETURN_CODE = 0
+   THEN
+      OUT_DATE = DTSYSDT_WORK.OUTPUT_DATE_JUL;
+   ELSE
+      OUT_DATE = 0;
+   RETURN(OUT_DATE);
+-END DTFSDT6;

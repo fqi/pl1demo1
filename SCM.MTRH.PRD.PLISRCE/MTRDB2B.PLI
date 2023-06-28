@@ -1,0 +1,273 @@
+ /* MTRDB2B  CLSDB2: ERROR ROUTINE FOR HANDLING DB2 ERRORS FOR BATCH  */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2000-06-06 GHAY C26643   STANDARDIZE AND MAKE HEADER USE DATETIME */
+ /* 1989-08-02 AGA  C??????  ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* ERROR ROUTINE FOR HANDLING DB2 ERRORS FOR BATCH                   */
+ /*                                                                   */
+ /*********************************************************************/
+1MTRDB2B : PROC (COMMON,
+                 USER_MSG,
+                 SQLCA) REORDER;
+0DCL 1 COMMON              CONNECTED,
+       2 PGMID             CHAR(08),
+       2 VALID_STAT        CHAR(20);
+1DCL USER_MSG              CHAR (*);
+ DCL 1 SQLCA               CONNECTED,
+       2 SQLCAID           CHAR (8),
+       2 SQLCABC           FIXED BIN (31),
+       2 SQLCODE           FIXED BIN (31),
+       2 SQLERRM           CHAR (70) VARYING,
+       2 SQLERRP           CHAR (8),
+       2 SQLERRD (6)       FIXED BIN (31),
+       2 SQLWARN,
+         3 SQLWARN0        CHAR (1),
+         3 SQLWARN1        CHAR (1),
+         3 SQLWARN2        CHAR (1),
+         3 SQLWARN3        CHAR (1),
+         3 SQLWARN4        CHAR (1),
+         3 SQLWARN5        CHAR (1),
+         3 SQLWARN6        CHAR (1),
+         3 SQLWARN7        CHAR (1),
+       2 SQLEXT            CHAR (8);
+1/*-----------------------------------------------------------------*/
+ /*  DB2 RETURN CODE TRANSLATION                                    */
+ /*-----------------------------------------------------------------*/
+0DCL DSNTIAR               ENTRY OPTIONS (ASM,INTER,RETCODE);
+0DCL LEN                   FIXED BIN (31) INIT (79);
+0DCL DIM                   FIXED BIN (31) INIT (7);
+0DCL 1 ERROR_MESSAGE       AUTOMATIC,
+       3 ERROR_LEN         FIXED BIN (15) UNAL INIT ((LEN*DIM)),
+       3 TEXT (DIM)        CHAR (LEN);
+ ERROR_MESSAGE.TEXT(*) = '';
+1/*-----------------------------------------------------------------*/
+ /*  MISCELLANEOUS DEFINITIONS                                      */
+ /*-----------------------------------------------------------------*/
+0DCL (ADDR,
+     DATETIME,
+     PLIDUMP,
+     PLIRETV)              BUILTIN;
+ DCL DT_OUT                CHAR(17) INIT(''); /* TO RECEIVE DATETIME */
+ DCL 1 DT_OUT_OVER         BASED(ADDR(DT_OUT)), /* SEPARATE DATETIME */
+       3 CCYY              CHAR(4),
+       3 MM                CHAR(2),
+       3 DD                CHAR(2),
+       3 HRS               CHAR(2),
+       3 MIN               CHAR(2),
+       3 SEC               CHAR(2),
+       3 MIC               CHAR(3);
+0DCL 1 DT_SPLIT,                   /* PUT SEPARATORS INTO DATETIME */
+       3 CCYY              CHAR(4) INIT(''),
+       3 FIL1              CHAR(1) INIT('-'),
+       3 MM                CHAR(2) INIT(''),
+       3 FIL2              CHAR(1) INIT('-'),
+       3 DD                CHAR(2) INIT(''),
+       3 FIL3              CHAR(1) INIT(' '),
+       3 HRS               CHAR(2) INIT(''),
+       3 FIL4              CHAR(1) INIT(':'),
+       3 MIN               CHAR(2) INIT(''),
+       3 FIL5              CHAR(1) INIT(':'),
+       3 SEC               CHAR(2) INIT('');
+ DCL DT_SPLIT_OVER         CHAR(19) BASED(ADDR(DT_SPLIT));
+
+0DCL VALID_STATS           CHAR (20) STATIC;
+ DCL VALID_CODES (05)      CHAR (4) DEF VALID_STATS;
+ DCL WORK_SQLCODE          CHAR (4) STATIC;
+ DCL PIC_SQLCODE           PIC '-999' DEF WORK_SQLCODE;
+ DCL I                     FIXED BIN (15) STATIC INIT (0);
+ DCL STATUS_OK             BIT (1) STATIC INIT ('0'B);
+ DCL YES                   BIT (1) STATIC INIT ('1'B);
+ DCL NO                    BIT (1) STATIC INIT ('0'B);
+1/*-------------------------------------------------------------------*/
+ /*   COMPARE THE STATUS CODE RETURNED FROM THE CALL TO DB2 TO THE    */
+ /*   LIST OF ACCEPTABLE STATUS CODES SUPPLIED BY THE CALLING PROGRAM.*/
+ /*   IF THE STATUS RETURNED IS NOT ACCEPTABLE THEN PRODUCE AN ERROR. */
+ /*-------------------------------------------------------------------*/
+0STATUS_OK = NO;
+0PIC_SQLCODE = SQLCA.SQLCODE;
+ VALID_STATS = COMMON.VALID_STAT;
+0IF WORK_SQLCODE = ' 000' THEN
+    STATUS_OK = YES;
+ ELSE
+    DO I = 1 TO 5 WHILE (STATUS_OK = NO);
+       IF VALID_CODES (I) = WORK_SQLCODE THEN
+          STATUS_OK = YES;
+    END;
+0IF STATUS_OK = YES THEN
+    RETURN;
+-/*-------------------------------------------------------------------*/
+ /*   TRANSLATE ERROR CODE                                            */
+ /*-------------------------------------------------------------------*/
+0CALL DSNTIAR(SQLCA,ERROR_MESSAGE,LEN);
+0IF PLIRETV = 0 THEN;
+ ELSE
+    ERROR_MESSAGE.TEXT(1) = 'ERROR ' || PLIRETV;
+-/*-------------------------------------------------------------------*/
+ /*   CREATE AN ERROR MESSAGE                                         */
+ /*-------------------------------------------------------------------*/
+0CALL BATCH_MESSAGE;
+0CALL PLIDUMP('TBFH');
+0STOP;
+1BATCH_MESSAGE : PROC;
+ /*-------------------------------------------------------------------*/
+ /*   BATCH ERROR REPORT                                              */
+ /*-------------------------------------------------------------------*/
+0DCL MTRHERR                 OUTPUT RECORD FILE
+                                     ENV(TOTAL,FB,CTLASA,RECSIZE(133));
+0DCL 1 LINE1                 STATIC,
+       2 CC                  CHAR (01) INIT ('1'),
+       2 FILL1               CHAR (20) INIT (' '),
+       2 FILL2               CHAR (33) INIT
+                             ('ICBC VICTORIA - BATCH DB2 ABEND '),
+       2 DTPRINT             CHAR (19) INIT (' '),
+       2 FILL4               CHAR (60) INIT (' ');
+0DCL 1 LINE2                 STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (20) INIT (' '),
+       2 FILL2               CHAR (09) INIT ('PROGRAM:'),
+       2 PGM                 CHAR (13) INIT (' '),
+       2 FILL5               CHAR (90) INIT (' ');
+0DCL 1 LINE3                 STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (20) INIT (' '),
+       2 MESSAGE             CHAR (79) INIT (' '),
+       2 FILL2               CHAR (33) INIT (' ');
+0DCL 1 LINE4                 STATIC,
+       2 CC                  CHAR (01) INIT ('0'),
+       2 FILL1               CHAR (20) INIT (' '),
+       2 FILL2               CHAR (47) INIT
+                   ('DB/LTERM  SQLCODE  SQLERRP   SQLERRD           '),
+       2 FILL3               CHAR (65) INIT
+                             ('  SQLWARN            SQLEXT');
+0DCL 1 LINE5                 STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (20) INIT (' '),
+       2 DBLTERM             CHAR (08) INIT (' '),
+       2 FILL2               CHAR (04) INIT (' '),
+       2 SQLCODE             PIC '-999' INIT ('0'),
+       2 FILL3               CHAR (03) INIT (' '),
+       2 SQLERRP             CHAR (08) INIT (' '),
+       2 FILL4               CHAR (07) INIT ('  (1)'),
+       2 SQLERRD1            PIC '(10)9' INIT ('0'),
+       2 FILL5               CHAR (10) INIT ('      (0)'),
+       2 SQLWARN0            CHAR (01) INIT (' '),
+       2 FILL6               CHAR (05) INIT (' (1)'),
+       2 SQLWARN1            CHAR (01) INIT (' '),
+       2 FILL7               CHAR (09) INIT (' '),
+       2 SQLEXT              CHAR (08) INIT (' '),
+       2 FILL8               CHAR (34) INIT (' ');
+0DCL 1 LINE6                 STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (49) INIT (' '),
+       2 FILL2               CHAR (05) INIT ('(2)'),
+       2 SQLERRD2            PIC '(10)9' INIT ('0'),
+       2 FILL3               CHAR (10) INIT ('      (2)'),
+       2 SQLWARN2            CHAR (01) INIT (' '),
+       2 FILL4               CHAR (05) INIT (' (3)'),
+       2 SQLWARN3            CHAR (01) INIT (' '),
+       2 FILL5               CHAR (51) INIT (' ');
+0DCL 1 LINE7                 STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (49) INIT (' '),
+       2 FILL2               CHAR (05) INIT ('(3)'),
+       2 SQLERRD3            PIC '(10)9' INIT ('0'),
+       2 FILL3               CHAR (10) INIT ('      (4)'),
+       2 SQLWARN4            CHAR (01) INIT (' '),
+       2 FILL4               CHAR (05) INIT (' (5)'),
+       2 SQLWARN5            CHAR (01) INIT (' '),
+       2 FILL5               CHAR (51) INIT (' ');
+0DCL 1 LINE8                 STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (49) INIT (' '),
+       2 FILL2               CHAR (05) INIT ('(4)'),
+       2 SQLERRD4            PIC '(10)9' INIT ('0'),
+       2 FILL3               CHAR (10) INIT ('      (6)'),
+       2 SQLWARN6            CHAR (01) INIT (' '),
+       2 FILL4               CHAR (05) INIT (' (7)'),
+       2 SQLWARN7            CHAR (01) INIT (' '),
+       2 FILL5               CHAR (51) INIT (' ');
+0DCL 1 LINE9                 STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (49) INIT (' '),
+       2 FILL2               CHAR (05) INIT ('(5)'),
+       2 SQLERRD5            PIC '(10)9' INIT ('0'),
+       2 FILL5               CHAR (68) INIT (' ');
+0DCL 1 LINE10                STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (49) INIT (' '),
+       2 FILL2               CHAR (05) INIT ('(6)'),
+       2 SQLERRD6            PIC '(10)9' INIT ('0'),
+       2 FILL5               CHAR (68) INIT (' ');
+0DCL 1 LINE11                STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (20) INIT (' '),
+       2 SQLMESS             CHAR (79) INIT (' '),
+       2 FILL2               CHAR (33) INIT (' ');
+0DCL 1 LINE12                STATIC,
+       2 CC                  CHAR (01) INIT (' '),
+       2 FILL1               CHAR (20) INIT (' '),
+       2 FILL2               CHAR (09) INIT ('SQLERRM:'),
+       2 SQLERRM             CHAR (70) INIT (' '),
+       2 FILL3               CHAR (33) INIT (' ');
+1/*-------------------------------------------------------------------*/
+ /*   FORMAT AND PRINT BATCH ERROR REPORT                             */
+ /*-------------------------------------------------------------------*/
+0DT_OUT          = DATETIME;    /* PUT SYSTEM DATE AND TIME INTO HDR  */
+ DT_SPLIT        = DT_OUT_OVER, BY NAME;
+ LINE1.DTPRINT   = DT_SPLIT_OVER;
+ WRITE FILE(MTRHERR) FROM (LINE1);
+0LINE2.PGM       = COMMON.PGMID;
+ WRITE FILE(MTRHERR) FROM (LINE2);
+0LINE3.MESSAGE   = USER_MSG;
+ WRITE FILE(MTRHERR) FROM (LINE3);
+0WRITE FILE(MTRHERR) FROM (LINE4);
+0LINE5.DBLTERM   = '';
+ LINE5.SQLCODE   = SQLCA.SQLCODE;
+ LINE5.SQLERRP   = SQLCA.SQLERRP;
+ LINE5.SQLERRD1  = SQLCA.SQLERRD(1);
+ LINE5.SQLWARN0  = SQLCA.SQLWARN0;
+ LINE5.SQLWARN1  = SQLCA.SQLWARN1;
+ LINE5.SQLEXT    = SQLCA.SQLEXT;
+ WRITE FILE(MTRHERR) FROM (LINE5);
+0LINE6.SQLERRD2  = SQLCA.SQLERRD(2);
+ LINE6.SQLWARN2  = SQLCA.SQLWARN2;
+ LINE6.SQLWARN3  = SQLCA.SQLWARN3;
+ WRITE FILE(MTRHERR) FROM (LINE6);
+0LINE7.SQLERRD3  = SQLCA.SQLERRD(3);
+ LINE7.SQLWARN4  = SQLCA.SQLWARN4;
+ LINE7.SQLWARN5  = SQLCA.SQLWARN5;
+ WRITE FILE(MTRHERR) FROM (LINE7);
+0LINE8.SQLERRD4  = SQLCA.SQLERRD(4);
+ LINE8.SQLWARN6  = SQLCA.SQLWARN6;
+ LINE8.SQLWARN7  = SQLCA.SQLWARN7;
+ WRITE FILE(MTRHERR) FROM (LINE8);
+0LINE9.SQLERRD5  = SQLCA.SQLERRD(5);
+ WRITE FILE(MTRHERR) FROM (LINE9);
+0LINE10.SQLERRD6 = SQLCA.SQLERRD(6);
+ WRITE FILE(MTRHERR) FROM (LINE10);
+0LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(1);
+ WRITE FILE(MTRHERR) FROM (LINE11);
+0LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(2);
+ WRITE FILE(MTRHERR) FROM (LINE11);
+0LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(3);
+ WRITE FILE(MTRHERR) FROM (LINE11);
+0LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(4);
+ WRITE FILE(MTRHERR) FROM (LINE11);
+0LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(5);
+ WRITE FILE(MTRHERR) FROM (LINE11);
+0LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(6);
+ WRITE FILE(MTRHERR) FROM (LINE11);
+0LINE11.SQLMESS  = ERROR_MESSAGE.TEXT(7);
+ WRITE FILE(MTRHERR) FROM (LINE11);
+0LINE12.SQLERRM = SQLCA.SQLERRM;
+ WRITE FILE(MTRHERR) FROM (LINE12);
+0END BATCH_MESSAGE;
+0END MTRDB2B;

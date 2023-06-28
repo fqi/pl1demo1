@@ -1,0 +1,141 @@
+ /* GETMSCD  CLSMVS: DETERMINE THE DRIVER'S MASTER STATUS             */00000100
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */00000200
+ /*********************************************************************/00000300
+ /*                                                                   */00000400
+ /* WHEN       WHO  CR #     WHAT                                     */00000500
+ /* ---------- ---- -------- ---------------------------------------- */00000600
+ /* 2000-02-24 MMC  ILS      INDEFINITELY LICENCE SUSPENSION          */00000400
+ /* 1998-11-06 MMC  C980246  Y2K COMPLIANT                            */00000700
+ /* 960430  CC   DPID  CLONED FROM DSSMPB1 AND CHANGED TO PASS BACK   */00070000
+ /*                    THE EFFECTIVE DATE OF THE MASTER STATUS TO BE  */00080000
+ /*                    PUT INTO THE MSDT FIELD OF THE MASTER          */00090000
+ /*********************************************************************/00130000
+1GETMSCD: PROC (COMMON,                                                 C980246
+                DSDRPCB_PTR,                                            00150000
+                INPUT_LICENCE,                                          00160000
+                MST_STAT,                                               00170000
+                MST_DATE) REORDER;                                      00180000
+1  /*----------------------------------------------------------------*/ 00190000
+   /* SUBROUTINE DECLARES                                               00200000
+   /*----------------------------------------------------------------*/ 00210000
+  DCL 1 COMMON  CONNECTED,                                              C980246
+     %INCLUDE COMMON;                                                   C980246
+0  DCL INPUT_LICENCE         FIXED DEC (7,0),                           00220000
+       DSIOPCB_PTR           POINTER,                                   00230000
+       MST_STAT              CHAR (1),                                  00240000
+       MST_STAT_9            PIC '9' DEF MST_STAT,                      00250000
+       REL_DATE_FLAG         PIC '9',                                   00260000
+       MST_DATE              FIXED DEC (7,0),                           00261000
+       NMCD_CHAR             CHAR (1),                                  00270000
+       NMCD_9                PIC '9' BASED(ADDR(NMCD_CHAR));            00280000
+0  DCL 1 UPDALRT_PARM,                                                  00290000
+         3 LNUM              FIXED BIN (31),                            00300000
+         3 OLD_MSCD          CHAR (01),                                 00310000
+         3 NEW_MSCD          CHAR (01),                                 00320000
+         3 CALC_ALRT         CHAR (01),                                 00330000
+         3 RETURN_CODE       FIXED BIN (15),                            00340000
+         3 SYSMSG            CHAR (79);                                 00350000
+   DCL (VERIFY,                                                         C980246
+        ADDR,                                                           C980246
+        NULL)    BUILTIN;                                               C980246
+1  /*----------------------------------------------------------------*/ 00360000
+   /* LITERALS                                                          00370000
+   /*----------------------------------------------------------------*/ 00380000
+
+0  DCL RANK_ARRAY (0:9)      PIC'9' INIT(0,5,4,3,2,1,1,1,6,1);          ILS
+1  /*----------------------------------------------------------------*/ 00400000
+   /* EXTERNAL DECLARES                                                 00410000
+   /*----------------------------------------------------------------*/ 00420000
+1%INCLUDE DR1MST;                                                       00440000
+1%INCLUDE DR1STAT;                                                      00450000
+1%INCLUDE STDPARM;                                                      C980246
+1%INCLUDE DSDRPCB;                                                      00480000
+1  /*----------------------------------------------------------------*/ 00490000
+   /* EXTERNAL ROUTINES                                                 00500000
+   /*----------------------------------------------------------------*/ 00510000
+1%INCLUDE MTRHDLI;                                                      C980246
+1%INCLUDE UPDALRT;                                                      00530000
+1   /*****************************************************************/ 00540000
+    /* MAINLINE                                                         00550000
+    /*****************************************************************/ 00560000
+    PGMID                = 'GETMSCD';                                   00570000
+    MST_STAT             = '0';                                         00580000
+    MST_DATE             = 0;                                           00581000
+    REL_DATE_FLAG        = 0;                                           00590000
+0   /*---------------------------------------------------------------*/ 00600000
+    /* DETERMINE THE MASTER STATUS FOR THE DL# INDICATED IN THE         00610000
+    /* VARIABLE, INPUT_LICENCE.  ESTABLISH PARENTAGE ON THE ROOT        00620000
+    /* SEGMENT USE A PATH CALL TO GET THE ROOT SEGMENT ALSO             00630000
+    /*---------------------------------------------------------------*/ 00640000
+0   DR1MST_SSAE.LNUM     = INPUT_LICENCE;                               00650000
+    DR1MST_SSAE.CMD_CODE = 'DP-';                                       00660000
+    DR1STAT_PTR          = ADDR (DR1MST_EOS);                           00670000
+    DR1MST               = '';                                          00680000
+    DR1STAT              = '';                                          00690000
+    COMMON.VALID_STAT    = 'GE';                                        C980246
+0   CALL MTRHDLI (COMMON,                                               00710000
+                  'GETMSCD: IMS ERROR IN GU DR1MST AND DR1STAT',        C980246
+                   FIVE,                                                00720000
+                   GU,                                                  00730000
+                   DSDRPCB_PTR,                                         00740000
+                   DR1MST_HLD,                               /* REL12 */00750000
+                   DR1MST_SSAE,                                         00760000
+                   DR1STAT_SSAU);                                       00770000
+0   IF (DSDRPCB.STATCD = 'GE') THEN;                                    00780000
+    ELSE                                                                00790000
+       DO;                                                              00800000
+0         /*---------------------------------------------------------*/ 00810000
+          /* PROCESS ALL STATUS SEGMENTS UNDER THE ROOT.  CHOOSE THE    00820000
+          /* MASTER STATUS FROM THE DEPENDANT STATUS SEGMENT WHICH      00830000
+          /* TRANSLATES TO THE HIGHEST RANK.                            00840000
+          /*---------------------------------------------------------*/ 00850000
+          MST_DATE = DR1MST.MSDT;                                       00851000
+0         DO WHILE (DSDRPCB.STATCD = '  ');                             00860000
+             NMCD_CHAR      = DR1STAT.NMCD;                             00870000
+0            IF (VERIFY(NMCD_CHAR,'0123456789') = 0) THEN DO;           00880000
+                IF (RANK_ARRAY(NMCD_9) > RANK_ARRAY(MST_STAT_9))        00890000
+                   THEN DO;                                             00892000
+                   MST_STAT = DR1STAT.NMCD;                             00900000
+                   MST_DATE = DR1STAT.EFDT;                             00900100
+                END;                                                    00901000
+             END;                                                       00902000
+0            IF ((DR1STAT.NMCD > '0')             &                     00910000
+                 (VERIFY (DR1STAT.SECT,'13') = 0)) THEN                 00920000
+                REL_DATE_FLAG = 1;                                      00930000
+0            COMMON.VALID_STAT = 'GEGK';                                C980246
+0            CALL MTRHDLI (COMMON,                                      C980246
+                           'GETMSCD: IMS ERROR IN GNP DR1STAT',         C980246
+                           FOUR,                                        00960000
+                           GNP,                                         00970000
+                           DSDRPCB_PTR,                                 00980000
+                           DR1STAT,                                     00990000
+                           DR1STAT_SSAU);                               01000000
+0         END;                                                          01010000
+       END;                                                             01020000
+    IF (DR1MST.MSCD ^= MST_STAT) THEN                                   01030000
+       CALL UPDATE_USBY_ALERT_FLAG;                                     01040000
+1/*********************************************************************/01050000
+ /* CALL THE EXTERNAL SUBROUTINE TO UPDATE THE USED BY TABLE WHEN THE   01060000
+ /* MASTER STATUS CHANGES.                                              01070000
+ /* NEW MASTER STATUS OF ('1','2','3','8')TURNS THE ALERT FLAG ON  ('Y')01080000
+ /* NEW MASTER STATUS OF ('0','4')     TURNS THE ALERT FLAG OFF (' ')   01090000
+ /*********************************************************************/01100000
+0UPDATE_USBY_ALERT_FLAG: PROC;                                          01110000
+    UPDALRT_PARM.LNUM         = INPUT_LICENCE;                          01120000
+    UPDALRT_PARM.OLD_MSCD     = DR1MST.MSCD;                            01130000
+    UPDALRT_PARM.NEW_MSCD     = MST_STAT;                               01140000
+    UPDALRT_PARM.CALC_ALRT    = '';                                     01150000
+    UPDALRT_PARM.RETURN_CODE  = 0;                                      01160000
+    UPDALRT_PARM.SYSMSG       = '';                                     01170000
+0   /*---------------------------------------------------------------*/ 01180000
+    /* UPDALRT_PARM.OLD_MSCD IS PREVIOUSLY ASSIGNED                     01190000
+    /*---------------------------------------------------------------*/ 01200000
+    CALL UPDALRT (COMMON,                                               C980246
+                  UPDALRT_PARM.LNUM,                                    01220000
+                  UPDALRT_PARM.OLD_MSCD,                                01230000
+                  UPDALRT_PARM.NEW_MSCD,                                01240000
+                  UPDALRT_PARM.CALC_ALRT,                               01250000
+                  UPDALRT_PARM.RETURN_CODE,                             01260000
+                  UPDALRT_PARM.SYSMSG);                                 01270000
+-END UPDATE_USBY_ALERT_FLAG;                                            01280000
+-END GETMSCD;                                                           01290000

@@ -1,0 +1,120 @@
+ /* DSSMPB3  CLSMVS: EDIT MASTER STATUS USING LINE DATABASE           */
+ /* OWNING SYSTEM  : DSSM - DRIVER LICENCING SYSTEM                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2003-08-28 NK   40365    CORRECT EDITS                            */40365
+ /* 1999-11-24 NK   ILS      INDEFINITE LICENCE SUSPENSION PROJECT    */ILS
+ /* 1998-11-06 NKEM C980246  Y2K - COMLIANT                           */
+ /* 1990-10-13 GTRO CR507    DRIVER'S SYSTEM CLEAN UP                 */
+ /* 1990-06-22 GTRO REL12    INTEGRATE DRIVER/CLIENT                  */
+ /* 1983-05-04 GSHE REL05    R8.2 DB CONVERSION                       */
+ /* 1983-04-25 RFLI REL04    FIX LAST FIX                             */
+ /* 1983-02-24 GSHE REL03    ADD CHECK FOR DLET FLAG                  */
+ /* 1981-09-?? PSIV REL02    RETURN LINE ESTENSION FOR SUSPENSION     */
+ /* 1981-07=?? PSIV REL01    RETURN SUSP AND CPIC FLAGS               */
+ /* 1981=-7-?? MLID REL00    CREATED                                  */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /*  GETS THE EXPANDED STATUS DECRIPTION FROM THE LINE DATABASE       */
+ /*  IF THE EXTN_FLAG PARAMETER IS SET TO 'Y' AND THE EXPANDED STATUS */
+ /*  HAS A SUSP_FLAG THE SUSPENSION DESCRIPTION IS RETURNED           */
+ /*********************************************************************/
+ DSSMPB3: PROCEDURE (COMMON,
+                     DSLNPCB_PTR,
+                     STATUS_CODE,
+                     EXTN_FLAG,
+                     SUSP_FLAG,
+                     CPIC_FLAG,
+                     STATUS_DESCRIPTION) REORDER;
+1  /*----------------------------------------------------------------*/
+   /* SUBROUTINE DECLARES
+   /*----------------------------------------------------------------*/
+   DCL STATUS_CODE           CHAR(06);
+   DCL EXTN_FLAG             CHAR(01);
+   DCL SUSP_FLAG             CHAR(01);
+   DCL CPIC_FLAG             CHAR(01);
+   DCL MASTER_STATUS         CHAR(01);
+   DCL EXPANDED_STATUS       CHAR(04);
+   DCL STATUS_DESCRIPTION    CHAR(45);
+1  /*----------------------------------------------------------------*/
+   /* LITERALS
+   /*----------------------------------------------------------------*/
+   DCL ALPHA_NUMERIC         CHAR(36)
+       INIT('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+1/*-------------------------------------------------------------------*/
+ /* EXTERNAL DECLARES
+ /*-------------------------------------------------------------------*/
+ %INCLUDE DSCTRFC;
+ DCL 1 COMMON,
+       %INCLUDE COMMON;
+ %INCLUDE LN1DESC;
+ %INCLUDE LN1EXTN;
+ %INCLUDE DSLNPCB;
+ %INCLUDE MTRHDLI;
+ %INCLUDE STRRJST;
+
+1/*-------------------------------------------------------------------*/
+ /* MAINLINE
+ /*-------------------------------------------------------------------*/
+ CALL INITIALIZE_RTN;
+ IF (VERIFY(MASTER_STATUS,'012348') ^= 0) THEN                          ILS
+    RETURN;
+ CALL STRRJST(EXPANDED_STATUS);                                         40365
+ EXPANDED_STATUS = TRANSLATE(EXPANDED_STATUS,'0',' ');                  40365
+
+ IF (VERIFY(EXPANDED_STATUS,ALPHA_NUMERIC) ^= 0) THEN
+    RETURN;
+ LN1DESC_SSAE.NAME = 'STTS';
+ LN1DESC_SSAE.NMCD = MASTER_STATUS;
+ LN1DESC_SSAE.NECD = EXPANDED_STATUS;
+ COMMON.VALID_STAT = '  GEGB';
+ CALL MTRHDLI(COMMON,
+              'DSSMPB3: GET STATUS DESCRIPTION',
+              FOUR,
+              GU,
+              DSLNPCB_PTR,
+              LN1DESC,
+              LN1DESC_SSAE);
+ IF (DSLNPCB.STATCD ^= ' ') THEN
+    RETURN;
+ IF (LN1DESC.DLET = '1') THEN
+    RETURN;
+ ELSE
+    STATUS_DESCRIPTION = LN1DESC.LNDS;
+ CPIC_FLAG = LN1DESC.CPID;
+ SUSP_FLAG = LN1DESC.SUID;
+ IF ((EXTN_FLAG = 'Y') &
+     (SUSP_FLAG = '1')) THEN DO;
+    LN1EXTN_SSAE.EXID = '3';
+    CALL MTRHDLI(COMMON,
+                 'DSSMPB3: GET EXTENSION',
+                 FIVE,
+                 GU,
+                 DSLNPCB_PTR,
+                 LN1EXTN,
+                 LN1DESC_SSAE,
+                 LN1EXTN_SSAE);
+    IF (DSLNPCB.STATCD = ' ') THEN
+       STATUS_DESCRIPTION = LN1EXTN.EXDS;
+ END;
+ RETURN;
+
+1/********************************************************************/
+ /* INITIALIZATION
+ /********************************************************************/
+ INITIALIZE_RTN: PROC;
+    LN1DESC_SSAE.DESCID      = '';
+    LN1EXTN_SSAE.EXTNID      = '';
+    LN1DESC_SSAE.DESCID.SECT = SUBSTR(STATUS_CODE,1,1);
+    MASTER_STATUS            = SUBSTR(STATUS_CODE,2,1);
+    EXPANDED_STATUS          = SUBSTR(STATUS_CODE,3,4);
+    STATUS_DESCRIPTION       = (45)' ';
+    CPIC_FLAG                = '1';
+    SUSP_FLAG                = '1';
+ END INITIALIZE_RTN;
+-END DSSMPB3;

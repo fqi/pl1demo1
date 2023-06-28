@@ -1,0 +1,809 @@
+ /* MTRHDLI: CLSDB2: INTERFACE ROUTINE BETWEEN APPLICATION PGMS & DLI */C980246
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */C980246
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  ID     WHAT                                       */
+ /* ---------- ---- ------ ------------------------------------------ */
+ /* 2008-07-28 JZIE AMTI   ENTERPRISE PL/I CHANGES                    */
+ /* 1996-05-23 GTRO GMT002 REMOVE ISRT TO MASTER LTERM.               */
+ /* 1996-05-21 GTRO GMT001 STANDARDIZE (CHANGED EVERYTHING)           */
+ /* 1996-02-12 DTIT        WRITE ERRORS TO DB2 TABLE MERR & HANDLE    */
+ /*                        TCP/IP ERRORS                              */
+ /*********************************************************************/
+1MTRHDLI: PROC (COMMON,
+                USER_MSG,
+                PARM_COUNT,
+                FUNCTION,
+                PCB_PTR,
+                IO_AREA,
+                SSA01,
+                SSA02,
+                SSA03,
+                SSA04,
+                SSA05,
+                SSA06,
+                SSA07,
+                SSA08,
+                SSA09,
+                SSA10,
+                SSA11,
+                SSA12,
+                SSA13,
+                SSA14,
+                SSA15) REORDER;
+0  /*----------------------------------------------------------------*/
+   /* PASSED PARAMATERS
+   /*----------------------------------------------------------------*/
+0  DCL 1 COMMON              CONNECTED,
+         %INCLUDE COMMON;
+1  DCL USER_MSG              CHAR (*);
+   DCL PARM_COUNT            FIXED BIN (31);
+   DCL FUNCTION              CHAR (4);
+   DCL PCB_PTR               POINTER;
+   DCL IO_AREA               CHAR (*);
+   DCL SSA01                 CHAR (150);
+   DCL SSA02                 CHAR (150);
+   DCL SSA03                 CHAR (150);
+   DCL SSA04                 CHAR (150);
+   DCL SSA05                 CHAR (150);
+   DCL SSA06                 CHAR (150);
+   DCL SSA07                 CHAR (150);
+   DCL SSA08                 CHAR (150);
+   DCL SSA09                 CHAR (150);
+   DCL SSA10                 CHAR (150);
+   DCL SSA11                 CHAR (150);
+   DCL SSA12                 CHAR (150);
+   DCL SSA13                 CHAR (150);
+   DCL SSA14                 CHAR (150);
+   DCL SSA15                 CHAR (150);
+1  /*----------------------------------------------------------------*/
+   /* MESSAGE LINES
+   /*----------------------------------------------------------------*/
+0  DCL 1 LINE1,
+         2 CC                CHAR (01) INIT ('1'),
+         2 FILL2             CHAR (33) INIT
+           ('MOTOR VEHICLE BRANCH SYSTEMS'),
+         2 DATEOUT           CHAR (09) INIT (' '),
+         2 FILL3             CHAR (03) INIT (' '),
+         2 TIMEOUT           CHAR (08) INIT (' '),
+         2 FILL4             CHAR (79) INIT (' ');
+0  DCL 1 LINE2,
+         2 CC                CHAR (01) INIT (' '),
+         2 FILL2             CHAR (09) INIT ('PROGRAM:'),
+         2 PGM               CHAR (13) INIT (' '),
+         2 FILL4             CHAR (13) INIT ('STATUS CODE:'),
+         2 STATUS            CHAR (02) INIT (' '),
+         2 FILL5             CHAR (95) INIT (' ');
+0  DCL 1 LINE3,
+         2 CC                CHAR (01) INIT (' '),
+         2 MESSAGE           CHAR (79) INIT (' '),
+         2 FILL2             CHAR (53) INIT (' ');
+0  DCL 1 LINE4,
+         2 CC                CHAR (01) INIT (' '),
+         2 FILL2             CHAR (26) INIT
+           ('NUMBER OF DLI CALLS ISSUED'),
+         2 DLI_CALLS         PIC 'ZZZZZZ9' INIT (0),
+         2 FILL5             CHAR (99) INIT (' ');
+0  DCL 1 LINE5,
+         2 CC                CHAR (01) INIT ('0'),
+         2 FILL2             CHAR (47) INIT
+           ('DB/LTERM  STATUS  SEGLVL  OPTION        SEGNAME'),
+         2 FILL3             CHAR (85) INIT
+           ('   SENSEG FUNC  VALID CODE');
+0  DCL 1 LINE6,
+         2 CC                CHAR (01) INIT (' '),
+         2 DBLTERM           CHAR (08) INIT (' '),
+         2 FILL2             CHAR (04) INIT (' '),
+         2 STATUS            CHAR (02) INIT (' '),
+         2 FILL3             CHAR (06) INIT (' '),
+         2 SEGLVL            CHAR (02) INIT (' '),
+         2 FILL4             CHAR (05) INIT (' '),
+         2 OPTION            CHAR (04) INIT (' '),
+         2 FILL5             CHAR (09) INIT (' '),
+         2 SEGNAME           CHAR (08) INIT (' '),
+         2 FILL6             CHAR (03) INIT (' '),
+         2 SENSEG            PIC 'ZZZ9' INIT ('0'),
+         2 FILL7             CHAR (02) INIT (' '),
+         2 FUNC              CHAR (04) INIT (' '),
+         2 FILL8             CHAR (02) INIT (' '),
+         2 VALID_CODE (5)    CHAR (02) INIT (' '),
+         2 FILL9             CHAR (59) INIT (' ');
+0  DCL 1 LINE7,
+         2 CC                CHAR (01) INIT (' '),
+         2 FILL1             CHAR (63) INIT (' '),
+         2 VALID_CODE (6:10) CHAR (02) INIT (' '),
+         2 FILL2             CHAR (59) INIT (' ');
+0  DCL 1 LINE8,
+         2 CC                CHAR (01) INIT (' '),
+         2 FILL1             CHAR (01) INIT (' '),
+         2 FILL2             CHAR (10) INIT ('KEYFDBK:'),
+         2 FDBK              CHAR (60) INIT (' '),
+         2 FILL3             CHAR (61) INIT (' ');
+0  DCL 1 LINE9,
+         2 CC                CHAR (01) INIT (' '),
+         2 FILL2             CHAR (05) INIT ('LEN: '),
+         2 LEN               PIC 'ZZZ9' INIT ('0'),
+         2 FILL3             CHAR (02) INIT (' '),
+         2 HX                CHAR (60) INIT (' '),
+         2 FILL4             CHAR (61) INIT (' ');
+0  DCL 1 LINE10,
+         2 CC                CHAR (01) INIT (' '),
+         2 FILL1             CHAR (04) INIT (' '),
+         2 SSA               CHAR (07) INIT (' '),
+         2 SSA_VALUE         CHAR (60) INIT (' '),
+         2 FILL2             CHAR (61) INIT (' ');
+0  DCL 1 LINE11,
+         2 CC                CHAR (01) INIT (' '),
+         2 FILL1             CHAR (11) INIT (' '),
+         2 HX                CHAR (60) INIT (' '),
+         2 FILL2             CHAR (61) INIT (' ');
+1  /*----------------------------------------------------------------*/
+   /* GENERAL PCB MASK
+   /*----------------------------------------------------------------*/
+0  DCL 1 PCB_MASK            BASED (CALL_PTR),
+         2 NAME_PREFIX       CHAR (5),        /* PCB NAME PREFIX     */
+         2 NAME_SUFFIX       CHAR (3),        /* PCB NAME SUFFIX     */
+         2 RESVED            BIT (16),        /* RESERVED            */
+         2 STATCD            CHAR (2);        /* STATUS CODE         */
+0  /*----------------------------------------------------------------*/
+   /* GENERAL DATA BASE PCB MASK.
+   /*----------------------------------------------------------------*/
+0  DCL 1 DB_PCB              BASED (CALL_PTR),
+         %INCLUDE DBPCB;
+0  /*----------------------------------------------------------------*/
+   /* I/O PCB MASK:
+   /*----------------------------------------------------------------*/
+0  DCL 1 IO_PCB              BASED (IO_PCB_ADDR),
+         %INCLUDE IOPCB;
+0  /*----------------------------------------------------------------*/
+   /* EXPRESS PCB MASK
+   /*----------------------------------------------------------------*/
+0  DCL 1 EX_PCB              BASED (EX_PCB_ADDR),
+         %INCLUDE ALTPCB;
+0  /*-----------------------------------------------------------------*/
+   /* SCREEN ERROR MESSAGE
+   /*-----------------------------------------------------------------*/
+0  DCL 1 SCREEN,
+         2 LL                FIXED BIN(31),
+         2 ZZ                FIXED BIN(15),
+         2 PGMID             CHAR (8),
+         2 STATUS            CHAR (2),
+         2 MESSAGE           CHAR (79),
+         2 DLI_CALLS         PIC 'ZZ9',
+         2 DBLTERM           CHAR (8),
+         2 SEGLVL            CHAR (2),
+         2 OPTION            CHAR (4),
+         2 SEGNAME           CHAR (8),
+         2 SENSEG            PIC '9999',
+         2 FUNC              CHAR (4),
+         2 VALIDCD           CHAR (20),
+         2 FBLEN             PIC '9999',
+         2 FBAREA            CHAR (60),
+         2 FBHEXA            CHAR (60),
+         2 FBHEXB            CHAR (60),
+         2 SSA (4),
+           3 CHAR            CHAR (60),
+           3 HEXA            CHAR (60),
+           3 HEXB            CHAR (60);
+1  /*----------------------------------------------------------------*/
+   /* PL/1 BUILTIN FUNCTIONS
+   /*----------------------------------------------------------------*/
+0  DCL ADDR                  BUILTIN;
+0  DCL DATE                  BUILTIN;
+0  DCL INDEX                 BUILTIN;
+0  DCL NULL                  BUILTIN;
+0  DCL ONCODE                BUILTIN;
+0  DCL PLIDUMP               BUILTIN;
+0  DCL PLITDLI               EXT ENTRY;
+0  DCL STORAGE               BUILTIN;
+0  DCL STRING                BUILTIN;
+0  DCL SUBSTR                BUILTIN;
+0  DCL SYSNULL               BUILTIN;
+0  DCL TIME                  BUILTIN;
+0  DCL TRANSLATE             BUILTIN;
+1  /*----------------------------------------------------------------*/
+   /* LITERALS
+   /*----------------------------------------------------------------*/
+0  DCL ABND                  CHAR (4) INIT ('ABND') STATIC;
+0  DCL CHNG                  CHAR (4) INIT ('CHNG') STATIC;
+0  DCL CKPT                  CHAR (4) INIT ('CKPT') STATIC;
+0  DCL FOUR                  FIXED BIN (31) INIT (04) STATIC;
+0  DCL GU                    CHAR (4) INIT ('GU  ') STATIC;
+0  DCL ISRT                  CHAR (4) INIT ('ISRT') STATIC;
+0  DCL MOD_NAME              CHAR (8) STATIC INIT ('MTRHOE1 ');
+0  DCL NO                    BIT (1) STATIC INIT ('0'B);
+0  DCL ONE                   FIXED BIN (31) INIT (01) STATIC;
+0  DCL PURG                  CHAR (4) INIT ('PURG') STATIC;
+0  DCL ROLB                  CHAR (4) INIT ('ROLB') STATIC;
+0  DCL ROLL                  CHAR (4) INIT ('ROLL') STATIC;
+0  DCL SSA_TABLE (5)         CHAR (5)  STATIC INIT
+       ('SSA1:','SSA2:','SSA3:','SSA4:','SSA5:');
+0  DCL THREE                 FIXED BIN (31) INIT (03) STATIC;
+0  DCL TWO                   FIXED BIN (31) INIT (02) STATIC;
+0  DCL XRST                  CHAR (4) INIT ('XRST') STATIC;
+0  DCL YES                   BIT (1) STATIC INIT ('1'B);
+1  /*----------------------------------------------------------------*/
+   /* ERROR MESSAGES
+   /*----------------------------------------------------------------*/
+0  DCL MTRHDLI_001E          CHAR (79) STATIC INIT
+   ('MTRHDLI_001E: PROGRAM REQUESTED ABEND - PROGRAM ABORTED');
+0  DCL MTRHDLI_002E          CHAR (79) STATIC INIT
+   ('MTRHDLI_002E: PROGRAM REQUESTED A ROLL CALL - CALL PERFORMED');
+0  DCL MTRHDLI_003E          CHAR (79) STATIC INIT
+   ('MTRHDLI_003E: NON ACCEPTABLE STATUS RETURNED - PROGRAM ABORTED');
+   DCL MTRHDLI_004E          CHAR (79) INIT
+   ('MTRHDLI_004E: MTRHDLI CALLED WITH OUT OF RANGE PARM_COUNT = NN');
+   DCL MTRHDLI_004E_PARM     PIC '99'  DEF MTRHDLI_004E POS(61);
+1  /*----------------------------------------------------------------*/
+   /* WORKING STORAGE
+   /*----------------------------------------------------------------*/
+0  DCL 1 WS,
+         2 ERR_MSG           CHAR (79),
+         2 HEXLEN            FIXED BIN (15),
+         2 IO_PCB_SW         BIT (1),
+         2 REGION            CHAR (3),
+         2 STATUS_OK         BIT (1),
+         2 SYSDATE           CHAR (6),
+         2 SYSTIME           CHAR (9),
+         2 VALID_STATS       CHAR (20),
+         2 ZZZZ_EOWS         CHAR (00);
+0  DCL I                     FIXED BIN (15);
+0  DCL VALID_CODES (10)      CHAR (2) DEF WS.VALID_STATS;
+0  DCL HH                    PIC '99'  DEF WS.SYSTIME;
+0  DCL MM                    PIC '99'  DEF WS.SYSTIME POS (3);
+0  DCL SS                    PIC '99'  DEF WS.SYSTIME POS (5);
+0  DCL TTT                   PIC '999' DEF WS.SYSTIME POS (7);
+0  DCL YY                    PIC '99'  DEF WS.SYSDATE;
+0  DCL MON                   PIC '99'  DEF WS.SYSDATE POS (3);
+0  DCL DD                    PIC '99'  DEF WS.SYSDATE POS (5);
+0  DCL CALL_PTR              POINTER;
+1  /*---------------------------------------------------------------*/
+   /* MISCELLANEOUS DEFINITIONS
+   /*---------------------------------------------------------------*/
+0  DCL 1 WORK,
+         2 OPTIONS           CHAR (4),       /* OPTIONS               */
+         2 SEGLVL            CHAR (2),       /* SEGMENT LEVEL         */
+         2 SEGNAM            CHAR (8),       /* SEGMENT NAME          */
+         2 SENSEG            FIXED BIN (31), /* SENSITIVE SEGMENTS    */
+         2 FBLEN             FIXED BIN (31), /* KEYFEEDBACK LENGTH    */
+         2 FBAREA            CHAR (60),      /* KEYFEEDBACK AREA      */
+         2 SSAS (4)          CHAR (60);      /* FIRST 4 SSA'S OF CALL */
+0  DCL 1 STORE_SSA_AND_FEEDBACK,
+         2 STORE_KEYFDBK     CHAR (60),
+         2 STORE_KEYFBHX1    CHAR (60),
+         2 STORE_KEYFBHX2    CHAR (60),
+         2 STORE_SSA (4),
+           3 STORE_SSA_CHAR  CHAR (60),
+           3 STORE_SSA_HEX1  CHAR (60),
+           3 STORE_SSA_HEX2  CHAR (60);
+0  /*----------------------------------------------------------------*/
+   /* SQL INCLUDES
+   /*----------------------------------------------------------------*/
+ EXEC SQL INCLUDE SQLCA;
+ EXEC SQL INCLUDE MERR;
+1/*********************************************************************/
+ /* ON ERROR BLOCKS                                                   */
+ /*********************************************************************/
+0   ON ERROR BEGIN;
+       ON ERROR SYSTEM;
+          IF (ONCODE() = 84)
+          THEN
+             CALL PLIDUMP('TBCNFNHNB',
+                          'MTRHERR COULD NOT BE OPENED, '
+                          || 'LOOK IN DB2 TABLE:MERR FOR MORE INFO');
+          ELSE
+             DO;
+                CALL PLIDUMP ('TBFH','ON ERROR CALLED');
+                CALL PLITDLI (ONE,ROLL);
+             END;
+          STOP;
+       END;
+1/*********************************************************************/
+ /* MAINLINE                                                          */
+ /*********************************************************************/
+0   WS                     = '';
+    I                      = '';
+    WORK                   = '';
+    CALL_PTR               = NULL();
+    STORE_SSA_AND_FEEDBACK = '';
+    SCREEN                 = '';
+    SQLCA                  = '';
+    MERR_R                 = '';
+0   IF (PARM_COUNT < TWO)
+    THEN
+       CALL_PTR = COMMON.IO_PCB_ADDR;
+    ELSE
+       CALL_PTR = PCB_PTR;
+0   WS.VALID_STATS         = COMMON.VALID_STAT;
+0   /*----------------------------------------------------------------*/
+    /* DID THE CALLING PROGRAM REQUEST AN ABEND ?
+    /*----------------------------------------------------------------*/
+    IF (FUNCTION = ABND)
+    THEN
+       DO;
+          IF (USER_MSG = ' ')
+          THEN
+             WS.ERR_MSG = MTRHDLI_001E;
+          ELSE
+             WS.ERR_MSG = USER_MSG;
+          CALL ERROR;
+       END;
+0   /*----------------------------------------------------------------*/
+    /* DID THE CALLING PROGRAM REQUEST A ROLL?
+    /*----------------------------------------------------------------*/
+0   IF (FUNCTION = ROLL)
+    THEN
+       DO;
+          IF (USER_MSG = ' ')
+          THEN
+             WS.ERR_MSG = MTRHDLI_002E;
+          ELSE
+             WS.ERR_MSG = USER_MSG;
+          CALL ERROR;
+       END;
+0   /*----------------------------------------------------------------*/
+    /* RESET NUMBER OF CALLS TO 0
+    /*----------------------------------------------------------------*/
+0   IF ((FUNCTION = CKPT)       |
+        ((FUNCTION = GU)       &
+         (PCB_PTR = IO_PCB_ADDR)))
+    THEN
+       COMMON.DLI_CALLS = 0;
+0   /*----------------------------------------------------------------*/
+    /* CALL TO DLI
+    /*----------------------------------------------------------------*/
+    SELECT (PARM_COUNT);
+      WHEN(1)  CALL PLITDLI(PARM_COUNT, FUNCTION);
+      WHEN(2)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR);
+      WHEN(3)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA);
+      WHEN(4)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01);
+      WHEN(5)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02);
+      WHEN(6)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03);
+      WHEN(7)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04);
+      WHEN(8)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05);
+      WHEN(9)  CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06);
+      WHEN(10) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07);
+      WHEN(11) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08);
+      WHEN(12) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08, SSA09);
+      WHEN(13) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08, SSA09, SSA10);
+      WHEN(14) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08, SSA09, SSA10, SSA11);
+      WHEN(15) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08, SSA09, SSA10, SSA11, SSA12);
+      WHEN(16) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08, SSA09, SSA10, SSA11, SSA12,
+                            SSA13);
+      WHEN(17) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08, SSA09, SSA10, SSA11, SSA12,
+                            SSA13, SSA14);
+      WHEN(18) CALL PLITDLI(PARM_COUNT, FUNCTION, PCB_PTR, IO_AREA,
+                            SSA01, SSA02, SSA03, SSA04, SSA05, SSA06,
+                            SSA07, SSA08, SSA09, SSA10, SSA11, SSA12,
+                            SSA13, SSA14, SSA15);
+      OTHERWISE DO; /* PARM_COUNT IS OUT OF RANGE */
+           MTRHDLI_004E_PARM = PARM_COUNT;
+           WS.ERR_MSG = MTRHDLI_004E;
+           CALL ERROR;
+         END;
+    END; /* SELECT */
+0   /*----------------------------------------------------------------*/
+    /* INCREMENT NUMBER OF CALLS BY 1
+    /*----------------------------------------------------------------*/
+0   COMMON.DLI_CALLS       = COMMON.DLI_CALLS + 1;
+0   /*----------------------------------------------------------------*/
+    /* COMPARE THE STATUS CODE RETURNED FROM THE CALL TO IMS TO THE
+    /* LIST OF ACCEPTABLE STATUS CODES SUPPLIED BY THE CALLING PROGRAM.
+    /* IF THE STATUS RETURNED IS NOT ACCEPTABLE THEN PRODUCE AN ERROR.
+    /*----------------------------------------------------------------*/
+0   WS.STATUS_OK           = NO;
+    IF (PCB_MASK.STATCD = '  ')
+    THEN
+       WS.STATUS_OK = YES;
+    ELSE
+       DO I = 1 TO 10 WHILE (WS.STATUS_OK = NO);
+          IF (VALID_CODES (I) = PCB_MASK.STATCD)
+          THEN
+             WS.STATUS_OK = YES;
+       END;
+0   IF (WS.STATUS_OK = NO)
+    THEN
+       DO;
+          IF (USER_MSG = ' ')
+          THEN
+             WS.ERR_MSG = MTRHDLI_003E;
+          ELSE
+             WS.ERR_MSG = USER_MSG;
+          CALL ERROR;
+       END;
+1/*********************************************************************/
+ /* CREATE AN ERROR MESSAGE                                           */
+ /*********************************************************************/
+0ERROR: PROC;
+0   CALL NORMALIZE_SSA;
+0   CALL FORMAT_MESSAGE;
+0   CALL PLITDLI (TWO,
+                  ROLB,
+                  IO_PCB_ADDR);
+0   CALL PLITDLI (FOUR,
+                  ISRT,
+                  IO_PCB_ADDR,
+                  SCREEN,
+                  MOD_NAME);
+0   WS.REGION      = '';
+0   SELECT (IO_PCB.STATCD);
+       WHEN ('  ') WS.REGION = 'MPP';
+       WHEN ('QH') WS.REGION = 'BMP'; /* TCPIP MPP FALLS INTO THIS */
+       WHEN ('AL') WS.REGION = 'DLI';
+    END;
+    CALL DB2_MERR_INSERT;
+0   IF ((WS.REGION = 'BMP')    |
+        (WS.REGION = 'DLI'))
+    THEN
+       CALL BATCH_MESSAGE;
+0   IF (FUNCTION = ABND)
+    THEN
+       DO;
+          CALL PLIDUMP('TBFH');
+          CALL PLITDLI (ONE,ROLL);
+       END;
+    STOP;
+-END ERROR;
+1/*********************************************************************/
+ /* NORMALIZE THE SSA, WHATEVER THAT MEANS                            */
+ /*********************************************************************/
+0NORMALIZE_SSA: PROC;
+0   /*----------------------------------------------------------------*/
+    /* IF THE DATA BASE PCB IS BEING USED THEN MOVE THE PCB INFORMATION
+    /* FROM THE LAST CALL TO THE COMMON AREA.
+    /*----------------------------------------------------------------*/
+    IF ((PCB_MASK.NAME_PREFIX = 'MTRHD') |
+        (PCB_MASK.NAME_PREFIX = 'MTRHG') |
+        (PCB_MASK.NAME_PREFIX = 'MTRHX'))
+    THEN
+       DO;                                   /* USING DB PCB     */
+          WS.IO_PCB_SW = NO;
+          WORK.OPTIONS = DB_PCB.OPTION;
+          WORK.SEGLVL  = DB_PCB.SEGLVL;
+          WORK.SEGNAM  = DB_PCB.SEGNAM;
+          WORK.SENSEG  = DB_PCB.SENSEG;
+          WORK.FBLEN   = DB_PCB.FBLNG;
+          WORK.FBAREA  = DB_PCB.FBAREA;
+       END;
+    ELSE                                     /* NOT USING DB PCB */
+       WS.IO_PCB_SW = YES;
+0   /*----------------------------------------------------------------*/
+    /* THE FOLLOWING IS MOVED NO MATTER WHAT PCB IS BEING USED
+    /*----------------------------------------------------------------*/
+0   IF (PARM_COUNT > 6)
+    THEN
+       WORK.SSAS (4) = SUBSTR(SSA04,1,60);
+    ELSE
+       WORK.SSAS (4) = ' ';
+0   IF (PARM_COUNT > 5)
+    THEN
+       WORK.SSAS (3) = SUBSTR(SSA03,1,60);
+    ELSE
+       WORK.SSAS (3) = ' ';
+0   IF (PARM_COUNT > 4)
+    THEN
+       WORK.SSAS (2) = SUBSTR(SSA02,1,60);
+    ELSE
+       WORK.SSAS (2) = ' ';
+0   IF (PARM_COUNT > 3)
+    THEN
+       WORK.SSAS (1) = SUBSTR(SSA01,1,60);
+    ELSE
+       WORK.SSAS (1) = ' ';
+0   /*----------------------------------------------------------------*/
+    /* TRUNCATE THE SSAS & KEYFEED BACK AREA TO CONTAIN ONLY VALID
+    /* INFORMATION, AND CREATE THE HEX EQUIVALENT OF THAT INFORMATION.
+    /* IF THE AREA IS BLANK THEN THE "NORMALIZING" ROUTINE IS BYPASSED.
+    /*----------------------------------------------------------------*/
+0   IF (WORK.FBLEN = 0)
+    THEN
+       DO;
+          STORE_KEYFDBK  = ' ';
+          STORE_KEYFBHX1 = ' ';
+          STORE_KEYFBHX2 = ' ';
+       END;
+    ELSE
+       DO;
+          WS.HEXLEN      = WORK.FBLEN;
+          STORE_KEYFDBK  = SUBSTR (WORK.FBAREA,1,WORK.FBLEN);
+          STORE_KEYFBHX1 = HEX1 (STORE_KEYFDBK);
+          STORE_KEYFBHX2 = HEX2 (STORE_KEYFDBK);
+       END;
+0   DO I = 1 TO 4;
+       IF (WORK.SSAS (I) = ' ')
+       THEN
+          DO;
+             STORE_SSA_CHAR (I) = ' ';
+             STORE_SSA_HEX1 (I) = ' ';
+             STORE_SSA_HEX2 (I) = ' ';
+          END;
+       ELSE
+          DO;
+             STORE_SSA_CHAR (I) = FINDLEN (WORK.SSAS (I));
+             STORE_SSA_HEX1 (I) = HEX1 (STORE_SSA_CHAR (I));
+             STORE_SSA_HEX2 (I) = HEX2 (STORE_SSA_CHAR (I));
+          END;
+    END;
+-END NORMALIZE_SSA;
+1/*********************************************************************/
+ /* FORMAT ERROR MESSAGE TO TERMINAL                                  */
+ /*********************************************************************/
+0FORMAT_MESSAGE: PROC;
+    SCREEN           = '';
+    SCREEN.LL        = STORAGE(SCREEN) - 2;
+    SCREEN.ZZ        = 0;
+    SCREEN.PGMID     = COMMON.PGMID;
+    SCREEN.STATUS    = PCB_MASK.STATCD;
+    SCREEN.MESSAGE   = WS.ERR_MSG;
+    SCREEN.DLI_CALLS = COMMON.DLI_CALLS;
+    SCREEN.DBLTERM   = DB_PCB.DBDNAM;
+    SCREEN.SEGLVL    = WORK.SEGLVL;
+    SCREEN.OPTION    = WORK.OPTIONS;
+    SCREEN.SEGNAME   = WORK.SEGNAM;
+    SCREEN.SENSEG    = WORK.SENSEG;
+    SCREEN.FUNC      = FUNCTION;
+    SCREEN.VALIDCD   = COMMON.VALID_STAT;
+    SCREEN.FBAREA    = STORE_KEYFDBK;
+    SCREEN.FBLEN     = WORK.FBLEN;
+    SCREEN.FBHEXA    = STORE_KEYFBHX1;
+    SCREEN.FBHEXB    = STORE_KEYFBHX2;
+0   DO  I = 1 TO 4;
+       SCREEN.SSA.CHAR(I) = STORE_SSA_CHAR(I);
+       SCREEN.SSA.HEXA(I) = STORE_SSA_HEX1(I);
+       SCREEN.SSA.HEXB(I) = STORE_SSA_HEX2(I);
+    END;
+-END FORMAT_MESSAGE;
+1/*********************************************************************/
+ /* SEND ERROR TO A DB2 TABLE MERR                                    */
+ /*********************************************************************/
+0DB2_MERR_INSERT: PROC;
+0  DCL LINE                  CHAR (80);
+0   /*----------------------------------------------------------------*/
+    /* FORMAT AND PRINT BATCH ERROR REPORT
+    /*----------------------------------------------------------------*/
+    MERR_R.TRAN     = COMMON.PGMID;
+    MERR_R.ROUT     = 'MTRHDLI';
+    MERR_R.CALL     = FUNCTION;
+    MERR_R.RTCD     = SCREEN.STATUS;
+    MERR_R.RSCD     = WORK.SEGNAM;
+    MERR_R.EMSG     = USER_MSG;
+0   WS.SYSTIME      = TIME;
+    WS.SYSDATE      = DATE;
+0   LINE1.DATEOUT   = YY || '/' || MON || '/' || DD;
+    LINE1.TIMEOUT   = HH || ':' || MM || ':' || SS;
+    LINE            = SUBSTR (STRING (LINE1), 2, 80);
+    MERR_R.SCRN     = LINE;
+0   LINE2.PGM       = SCREEN.PGMID;
+    LINE2.STATUS    = SCREEN.STATUS;
+    LINE            = SUBSTR (STRING (LINE2), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE3.MESSAGE   = SCREEN.MESSAGE;
+    LINE            = SUBSTR (STRING (LINE3), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE4.DLI_CALLS = SCREEN.DLI_CALLS;
+    LINE            = SUBSTR (STRING (LINE4), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+    LINE            = SUBSTR (STRING (LINE5), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE6.DBLTERM   = SCREEN.DBLTERM;
+    LINE6.STATUS    = SCREEN.STATUS;
+    LINE6.SEGLVL    = SCREEN.SEGLVL;
+    LINE6.OPTION    = SCREEN.OPTION;
+    LINE6.SEGNAME   = SCREEN.SEGNAME;
+    LINE6.SENSEG    = SCREEN.SENSEG;
+    LINE6.FUNC      = SCREEN.FUNC;
+    DO I = 1 TO 5;
+       LINE6.VALID_CODE (I) = VALID_CODES (I);
+    END;
+    LINE            = SUBSTR (STRING (LINE6), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   DO I = 6 TO 10;
+       LINE7.VALID_CODE (I) = VALID_CODES (I);
+    END;
+    LINE            = SUBSTR (STRING (LINE7), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE8.FDBK      = SCREEN.FBAREA;
+    LINE            = SUBSTR (STRING (LINE8), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE9.LEN       = SCREEN.FBLEN;
+    LINE9.HX        = SCREEN.FBHEXA;
+    LINE            = SUBSTR (STRING (LINE9), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   LINE11.HX       = SCREEN.FBHEXB;
+    LINE            = SUBSTR (STRING (LINE11), 2, 80);
+    MERR_R.SCRN     = MERR_R.SCRN || LINE;
+0   DO I = 1 TO 4;
+       LINE10.SSA       = SSA_TABLE (I);
+       LINE10.SSA_VALUE = SCREEN.SSA(I).CHAR;
+       LINE             = SUBSTR (STRING (LINE10), 2, 80);
+       MERR_R.SCRN      = MERR_R.SCRN || LINE;
+       LINE11.HX        = SCREEN.SSA(I).HEXA;
+       LINE             = SUBSTR (STRING (LINE11), 2, 80);
+       MERR_R.SCRN      = MERR_R.SCRN || LINE;
+       LINE11.HX        = SCREEN.SSA(I).HEXB;
+       LINE             = SUBSTR (STRING (LINE11), 2, 80);
+       MERR_R.SCRN      = MERR_R.SCRN || LINE;
+    END;
+0   EXEC SQL
+       INSERT
+       INTO   MERR
+              (PATS,
+               TRAN,
+               ROUT,
+               CALL,
+               RTCD,
+               RSCD,
+               EMSG,
+               SCRN)
+       VALUES (CURRENT TIMESTAMP,
+               :MERR_R.TRAN,
+               'MTRHDLI',
+               :MERR_R.CALL,
+               :MERR_R.RTCD,
+               :MERR_R.RSCD,
+               :MERR_R.EMSG,
+               :MERR_R.SCRN);
+-END DB2_MERR_INSERT;
+1/*********************************************************************/
+ /* BATCH ERROR REPORT                                                */
+ /*-------------------------------------------------------------------*/
+ /* DT JAN 96 - A TCP/IP MPP PROGRAM WILL ABEND WHEN TRYING TO        */
+ /*             MTRHERR, THIS WILL THEN BE HANDLED BY A ON CODE 84    */
+ /*********************************************************************/
+0BATCH_MESSAGE: PROC;
+0  DCL MTRHERR               OUTPUT RECORD FILE
+                             ENV(TOTAL,FB,CTLASA,RECSIZE(133));
+0   /*----------------------------------------------------------------*/
+    /* FORMAT AND PRINT BATCH ERROR REPORT
+    /*----------------------------------------------------------------*/
+0   WS.SYSTIME      = TIME;
+    WS.SYSDATE      = DATE;
+0   LINE1.DATEOUT   = YY || '/' || MON || '/' || DD;
+    LINE1.TIMEOUT   = HH || ':' || MM || ':' || SS;
+    WRITE FILE (MTRHERR) FROM (LINE1);
+0   LINE2.PGM       = SCREEN.PGMID;
+    LINE2.STATUS    = SCREEN.STATUS;
+    WRITE FILE (MTRHERR) FROM (LINE2);
+0   LINE3.MESSAGE   = SCREEN.MESSAGE;
+    WRITE FILE (MTRHERR) FROM (LINE3);
+0   LINE4.DLI_CALLS = SCREEN.DLI_CALLS;
+    WRITE FILE (MTRHERR) FROM (LINE4);
+    WRITE FILE (MTRHERR) FROM (LINE5);
+0   LINE6.DBLTERM   = SCREEN.DBLTERM;
+    LINE6.STATUS    = SCREEN.STATUS;
+    LINE6.SEGLVL    = SCREEN.SEGLVL;
+    LINE6.OPTION    = SCREEN.OPTION;
+    LINE6.SEGNAME   = SCREEN.SEGNAME;
+    LINE6.SENSEG    = SCREEN.SENSEG;
+    LINE6.FUNC      = SCREEN.FUNC;
+    DO I = 1 TO 5;
+       LINE6.VALID_CODE (I) = VALID_CODES (I);
+    END;
+    WRITE FILE (MTRHERR) FROM (LINE6);
+0   DO I = 6 TO 10;
+       LINE7.VALID_CODE (I) = VALID_CODES (I);
+    END;
+    WRITE FILE (MTRHERR) FROM (LINE7);
+0   LINE8.FDBK      = SCREEN.FBAREA;
+    WRITE FILE (MTRHERR) FROM (LINE8);
+0   LINE9.LEN       = SCREEN.FBLEN;
+    LINE9.HX        = SCREEN.FBHEXA;
+    WRITE FILE (MTRHERR) FROM (LINE9);
+0   LINE11.HX       = SCREEN.FBHEXB;
+    WRITE FILE (MTRHERR) FROM (LINE11);
+0   DO I = 1 TO 4;
+       LINE10.SSA       = SSA_TABLE (I);
+       LINE10.SSA_VALUE = SCREEN.SSA(I).CHAR;
+       WRITE FILE (MTRHERR) FROM (LINE10);
+       LINE11.HX        = SCREEN.SSA(I).HEXA;
+       WRITE FILE (MTRHERR) FROM (LINE11);
+       LINE11.HX        = SCREEN.SSA(I).HEXB;
+       WRITE FILE (MTRHERR) FROM (LINE11);
+    END;
+    CALL PLITDLI (ONE,ROLL); /* DO A ROLL JUST TO BE SURE */
+-END BATCH_MESSAGE;
+1/*********************************************************************/
+ /*  ACCEPT A CHARACTER STRING AND RETURN A "NORMALIZED" STRING.      */
+ /*  IF  PCB IS IO_PCB                                                */
+ /*      THEN THE SSA IS MODNAME SO RETURN LENGTH OF 8.               */
+ /*  IF  COLUMN 13 IS BLANK                                           */
+ /*      THEN THE SSA IS UNQUALIFIED SO RETURN LENGTH OF 12.          */
+ /*  IF  LEFT BRACKET NOT FOUND                                       */
+ /*      THEN THE SSA IS UNQUALIFIED SO RETURN LENGTH OF 12.          */
+ /*  IF  RIGHT BRACKET IS FOUND                                       */
+ /*      THEN THE SSA IS QUALIFIED SO RETURN LENGTH INDICATED BY      */
+ /*             THE RIGHT BRACKET                                     */
+ /*      ELSE THE SSA IS LONGER THAN 60 BYTES SO RETURN THE MAXIMUM   */
+ /*             LENGTH OF 60.                                         */
+ /*********************************************************************/
+0FINDLEN: PROC (SSAIN) RETURNS (CHAR(60));
+0  DCL SSAIN                 CHAR (60);
+   DCL COL13                 CHAR (01) DEF SSAIN POS(13);
+0  DCL SSAOUT                CHAR (60);
+   DCL IXLEFT                FIXED BIN (15);
+   DCL IXRIGHT               FIXED BIN (15);
+   DCL LENGTH                FIXED BIN (15);
+0  DCL BLANK                 CHAR (1) STATIC INIT (' ');
+   DCL LEFT                  CHAR (1) STATIC INIT ('(');
+   DCL RIGHT                 CHAR (1) STATIC INIT (')');
+   DCL ZERO                  FIXED BIN (15) STATIC INIT (0);
+   DCL MAXLENGTH             FIXED BIN (15) STATIC INIT (60);
+   DCL MINLENGTH             FIXED BIN (15) STATIC INIT (12);
+   DCL MODLENGTH             FIXED BIN (15) STATIC INIT (8);
+0   LENGTH    = 0;
+    IXRIGHT   = 0;
+    IXLEFT    = 0;
+0   IF (WS.IO_PCB_SW)
+    THEN
+       LENGTH = MODLENGTH;
+    ELSE
+       IF (COL13 = BLANK)
+       THEN
+          LENGTH = MINLENGTH;
+       ELSE
+          DO;
+             IXLEFT  = INDEX(SSAIN,LEFT);
+             IXRIGHT = INDEX(SSAIN,RIGHT);
+             IF (IXLEFT = ZERO)
+             THEN
+                LENGTH = MINLENGTH;
+             ELSE
+                IF (IXRIGHT = ZERO)
+                THEN
+                   LENGTH = MAXLENGTH;
+                ELSE
+                   LENGTH = IXRIGHT;
+          END;
+0   SSAOUT    = SUBSTR(SSAIN,1,LENGTH);
+    WS.HEXLEN = LENGTH;
+0   RETURN (SSAOUT);
+-END FINDLEN;
+1/*********************************************************************/
+ /* ACCEPT A CHARACTER STRING AND TRANSLATE THAT STRING TO THE FIRST  */
+ /* LINE OF A HEX DISPLAY AND RETURN                                  */
+ /*********************************************************************/
+0HEX1: PROC (CHARHEX) RETURNS (CHAR (60));
+0  DCL CHARHEX               CHAR (60);
+0  DCL HEXVAL (4)            CHAR (64) STATIC INIT
+   ('0000000000000000111111111111111122222222222222223333333333333333',
+    '4444444444444444555555555555555566666666666666667777777777777777',
+    '88888888888888889999999999999999AAAAAAAAAAAAAAAABBBBBBBBBBBBBBBB',
+    'CCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDDEEEEEEEEEEEEEEEEFFFFFFFFFFFFFFFF');
+0  DCL HEXVALUE              CHAR (256) DEF HEXVAL;
+0   RETURN (SUBSTR (TRANSLATE (CHARHEX,HEXVALUE),
+                    1,
+                    WS.HEXLEN));
+-END HEX1;
+1/*********************************************************************/
+ /* ACCEPT A CHARACTER STRING AND TRANSLATE THAT STRING TO THE SECOND */
+ /* LINE OF A HEX DISPLAY AND RETURN                                  */
+ /*********************************************************************/
+0HEX2: PROC (CHARHEX) RETURNS (CHAR (60));
+0  DCL CHARHEX               CHAR (60);
+0   RETURN (SUBSTR (TRANSLATE (CHARHEX,(16)'0123456789ABCDEF'),
+                    1,
+                    WS.HEXLEN));
+-END HEX2;
+-END MTRHDLI;

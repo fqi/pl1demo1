@@ -1,0 +1,44 @@
+ /* DTFAJ6M  CLSMVS: ADJUST CCYYDDD (JULIAN) DATE BY NUMBER OF MONTHS */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-10-08 SCAY 18311    ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THIS IS A FRONT END SUBROUTINE TO DTADJLM.                        */
+ /*                                                                   */
+ /*********************************************************************/
+ DTFAJ6M: PROC(IN_DATE, MTHS) RETURNS(PIC'(7)9') REORDER;
+   /*-----------------------------------------------------------------*/
+   /* PARAMETER DECLARATIONS                                          */
+   /*-----------------------------------------------------------------*/
+   DCL IN_DATE             PIC'(7)9';
+   DCL MTHS                FIXED BIN(15);
+   /*-----------------------------------------------------------------*/
+   /* WORKING STORAGE AND BUILT-IN FUNCTION DECLARATIONS              */
+   /*-----------------------------------------------------------------*/
+   DCL RESULT              PIC'(7)9';
+   DCL ADDR                BUILTIN;
+   /*-----------------------------------------------------------------*/
+   /* EXTERNAL SUBROUTINE AND FUNCTION DECLARATIONS                   */
+   /*-----------------------------------------------------------------*/
+   %INCLUDE DTADJLM;
+   /*******************************************************************/
+   /* MAINLINE                                                        */
+   /*******************************************************************/
+   DTADJLM_WORK.INPUT_DATA.INPUT_DT  = IN_DATE;
+   DTADJLM_WORK.INPUT_DATA.DELTA_AMT = MTHS;
+   CALL DTADJLM(DTADJLM_PTR);
+   IF DTADJLM_WORK.OUTPUT_DATA.RETURN_CODE = 0
+   THEN
+      RESULT = DTADJLM_WORK.OUTPUT_DATA.OUTPUT_DT;
+   ELSE
+      RESULT = 0;
+
+   RETURN(RESULT);
+ END DTFAJ6M;

@@ -1,0 +1,230 @@
+ /* ADDIDEP        : ADD IDEP STATUSES AND SUSPENSION                 */
+ /* OWNING SYSTEM  : DSSM - DRIVER LICENCING SYSTEM                   */
+ /*********************************************************************/
+ /* PROGRAM OVERVIEW:                                                 */
+ /* THIS SUBROUTINE ADDS THE IDEP XS, 0050, 00ST AND PENALTY FEE TO   */
+ /* THE DRIVER'S RECORD, CALL ADDSUSP TO ADD SUSPENSION, AND IS CALLED*/
+ /* BY DSSMPXS AND DSSMPADP                                           */
+ /*********************************************************************/
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2012-04-10 NK   IDEP II  30 DAY REVIEW DATE FOR 0-A200 AND 0-A300 */
+ /*                          ADD FOTO_CANCELLED                       */
+ /* 2010-05-13 MMC           IDEP PROJECT                             */
+ /*********************************************************************/
+ ADDIDEP: PROC(COMMON,
+               DSDRPCB_PTR,
+               LICENCE#,
+               EXPANDED_STATUS,
+               TODAY,
+               EFFECTIVE_DATE,
+               REVIEW_DATE,
+               DRIVER_STLI,
+               FOTO_CANCELLED,
+               RETURN_MESSAGE)
+               RETURNS ( BIT(1)) REORDER;
+
+   DCL 1 COMMON CONNECTED,
+       %INCLUDE COMMON;
+   %INCLUDE DSDRPCB;
+   DCL LICENCE#                           FIXED BIN(31),
+       EXPANDED_STATUS                    CHAR(06),
+       (TODAY,EFFECTIVE_DATE,REVIEW_DATE) FIXED DEC(7),
+       DRIVER_STLI                        CHAR(01),
+       FOTO_CANCELLED                     BIT(1),
+       RETURN_MESSAGE                     CHAR(79);
+ %INCLUDE BOOL;
+ %INCLUDE DR1MST;
+
+ DCL 1 DR1STAT             UNALIGNED,
+       2 STATID,
+         %INCLUDE DRKSTAT;
+       2 EOS               CHAR(0);
+ %INCLUDE DR1SUSP;
+ %INCLUDE STDPARM;
+
+ /*------------------------------------------------------------------*/
+ /* SUBROUTINE DECLARES                                              */
+ /*------------------------------------------------------------------*/
+ %INCLUDE ADDSUSP;
+ %INCLUDE CANFOTO;
+ %INCLUDE DLIERR;
+ %INCLUDE DTFAJ6M;
+ %INCLUDE DTFAJ6D;
+ %INCLUDE MTRHDLI;
+ %INCLUDE STATDAO;
+
+ DCL ADDR       BUILTIN;
+ DCL SUBSTR     BUILTIN;
+
+ DCL RETURN_FLAG BIT(1) INIT('1'B);
+ DCL (EFF_DATE_PLUS5YRS,
+      EFF_DATE_PLUS30DAYS,
+      EFF_DATE_PLUS50YRS)  FIXED DEC(7,0) INIT(0);
+ DCL EFF_DATE_PIC  PIC'(7)9';
+ DCL SUS_SRDT      FIXED DEC(7,0) INIT(0);
+ DCL TEMP_RC       BIT(1) INIT('1'B);
+
+ EFF_DATE_PIC        = EFFECTIVE_DATE;
+ EFF_DATE_PLUS30DAYS = DTFAJ6D(EFF_DATE_PIC, 30);
+ EFF_DATE_PLUS5YRS   = DTFAJ6M(EFF_DATE_PIC, 60);
+ EFF_DATE_PLUS50YRS  = DTFAJ6M(EFF_DATE_PIC, 600);
+
+ FOTO_CANCELLED = FALSE;
+ IF REVIEW_DATE = 0 THEN DO;
+   REVIEW_DATE = EFF_DATE_PLUS50YRS;
+   SUS_SRDT = 0;
+ END;
+ ELSE DO;
+   SUS_SRDT = REVIEW_DATE;
+ END;
+
+ DR1MST_SSAE.LNUM = LICENCE#;
+
+ IF (REVIEW_DATE > TODAY) THEN DO;
+   IF ^INSERT_STATUS(EXPANDED_STATUS,
+                     EFFECTIVE_DATE,
+                     REVIEW_DATE) THEN DO;
+     RETURN_MESSAGE = SUBSTR(EXPANDED_STATUS,2,5) ||
+                      ' ALREADY EXISTS FOR THAT EFFECTIVE DATE';
+     RETURN_FLAG = FALSE;
+     RETURN(RETURN_FLAG);
+   END;
+ END;
+
+ /*-------------------------------------------------------------------*/
+ /* ADD ASSOCIATED PENALTY FEE STATUS                                 */
+ /*-------------------------------------------------------------------*/
+ IF (RETURN_FLAG) THEN DO;
+   SELECT(EXPANDED_STATUS);
+     WHEN('31215A') DO;
+       IF ^INSERT_STATUS('30A200',
+                         EFFECTIVE_DATE,
+                         EFF_DATE_PLUS30DAYS) THEN DO;
+         RETURN_MESSAGE =
+           'DRIVER UPDATED: 0A200 EXISTS FOR THAT EFF DT';
+         RETURN_FLAG = FALSE;
+       END;
+     END;
+     WHEN('31215B') DO;
+       IF ^INSERT_STATUS('30A300',
+                         EFFECTIVE_DATE,
+                         EFF_DATE_PLUS30DAYS) THEN DO;
+        RETURN_MESSAGE =
+           'DRIVER UPDATED: 0A300 EXISTS FOR THAT EFF DT';
+         RETURN_FLAG    = FALSE;
+       END;
+     END;
+     WHEN('31215C') DO;
+       IF ^INSERT_STATUS('33A400',
+                          EFFECTIVE_DATE,
+                          EFF_DATE_PLUS50YRS) THEN DO;
+         RETURN_MESSAGE =
+           'DRIVER UPDATED: 3A400 EXISTS FOR THAT EFF DT';
+         RETURN_FLAG    = FALSE;
+       END;
+     END;
+     WHEN('312152') DO;
+       IF ^INSERT_STATUS('33A500',
+                         EFFECTIVE_DATE,
+                         EFF_DATE_PLUS50YRS) THEN DO;
+         RETURN_MESSAGE =
+           'DRIVER UPDATED: 3A500 EXISTS FOR THAT EFF DT';
+         RETURN_FLAG    = FALSE;
+       END;
+     END;
+     WHEN('312514')
+       SUS_SRDT = 0;
+     OTHERWISE;
+   END;
+ END;
+
+ /*-------------------------------------------------------------------*/
+ /* ADD REINSTATEMENT FEE AND 2YR SHORT TERM STATUSES                 */
+ /*-------------------------------------------------------------------*/
+ IF (RETURN_FLAG) THEN DO;
+   IF ^STAT_EXIST('300050') THEN
+     TEMP_RC = INSERT_STATUS('300050',
+                             EFFECTIVE_DATE,
+                             EFF_DATE_PLUS5YRS);
+   IF DRIVER_STLI < '5' & DRIVER_STLI > '0' THEN DO;
+     CALL CLEANUP_STAT('3000ST');
+     TEMP_RC =  INSERT_STATUS('3000ST',
+                              EFFECTIVE_DATE,
+                              EFF_DATE_PLUS5YRS);
+   END;
+ END;
+
+ /*-------------------------------------------------------------------*/
+ /* ADD PROHIB AND CANCEL LICENCE                                     */
+ /*-------------------------------------------------------------------*/
+ IF (RETURN_FLAG) THEN DO;
+   CALL ADDSUSP(COMMON,
+                DSDRPCB_PTR,
+                LICENCE#,
+                EXPANDED_STATUS,
+                TODAY,
+                EFFECTIVE_DATE,
+                SUS_SRDT);
+
+   IF DRIVER_STLI ^= '0' &
+      DRIVER_STLI ^= '7' &
+      DRIVER_STLI ^= '6' THEN DO;
+      FOTO_CANCELLED = CANFOTO(COMMON,
+                               DSDRPCB_PTR,
+                               LICENCE#,
+                               EFFECTIVE_DATE);
+   END;
+ END;
+ RETURN(RETURN_FLAG);
+
+ CLEANUP_STAT: PROC(E_STAT);
+   DCL E_STAT   CHAR(06);
+   DCL SYSMSG   CHAR(79) INIT('');
+   DR1STAT.SECT = SUBSTR(E_STAT,1,1);
+   DR1STAT.NMCD = SUBSTR(E_STAT,2,1);
+   DR1STAT.NECD = SUBSTR(E_STAT,3,4);
+   IF (STATDAO(STATCMD.PURGE,
+              LICENCE#,
+              DR1STAT,
+              DLIERR,
+              SYSMSG))
+   THEN;
+ END CLEANUP_STAT;
+
+ STAT_EXIST: PROC(E_STAT) RETURNS(BIT(1));
+   DCL E_STAT      CHAR(06);
+   DCL EXIST_FLAG  BIT(1) INIT('0'B);
+   DCL SYSMSG      CHAR(79) INIT('');
+   DR1STAT.SECT = SUBSTR(E_STAT,1,1);
+   DR1STAT.NMCD = SUBSTR(E_STAT,2,1);
+   DR1STAT.NECD = SUBSTR(E_STAT,3,4);
+   EXIST_FLAG = STATDAO(STATCMD.RECENT,
+                        LICENCE#,
+                        DR1STAT,
+                        DLIERR,
+                        SYSMSG);
+   RETURN(EXIST_FLAG);
+ END STAT_EXIST;
+
+ INSERT_STATUS: PROC(EX_STATUS,
+                     E_DATE,
+                     R_DATE) RETURNS(BIT(1));
+   DCL EX_STATUS CHAR(06);
+   DCL (E_DATE,R_DATE) FIXED DEC(7,0);
+   DCL RC              BIT(1) INIT('0'B);
+   DCL SYSMSG          CHAR(79) INIT('');
+
+   DR1STAT.SECT = SUBSTR(EX_STATUS,1,1);
+   DR1STAT.NMCD = SUBSTR(EX_STATUS,2,1);
+   DR1STAT.NECD = SUBSTR(EX_STATUS,3,4);
+   DR1STAT.EFDT = E_DATE;
+   DR1STAT.SRDT = R_DATE;
+   RC = STATDAO(STATCMD.INSERT,
+                LICENCE#,
+                DR1STAT,
+                DLIERR,
+                SYSMSG);
+   RETURN(RC);
+ END INSERT_STATUS;
+ END ADDIDEP;

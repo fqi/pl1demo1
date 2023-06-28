@@ -1,0 +1,51 @@
+ /* STRLJST  CLSMVS: RIGHT JUSTIFY A STRING                           */
+ /* OWNING SYSTEM  : MTRH - COMMON                                    */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2002-02-08 NK   ?        ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /*  RIGHT JUSTIFY THE INPUT STRING                                   */
+ /*                                                                   */
+ /*********************************************************************/
+ STRRJST: PROC (INPUT)
+          REORDER;
+
+ /*------------------------------------------------------------------*/
+ /*  PROCEDURE PARAMETERS
+ /*------------------------------------------------------------------*/
+ DCL  INPUT        CHAR(*);
+
+ /*------------------------------------------------------------------*/
+ /*  BUILTIN DECLARES
+ /*------------------------------------------------------------------*/
+ DCL  LENGTH       BUILTIN;
+ DCL  SUBSTR       BUILTIN;
+
+ /*------------------------------------------------------------------*/
+ /*  LOCAL VARIABLE DECLARES
+ /*------------------------------------------------------------------*/
+ DCL  INPUT_LGTH   FIXED BIN (15);
+ DCL  FIRST_ALPHA  FIXED BIN (15)  INIT (0);
+ DCL  I            FIXED BIN (15)  INIT (1);
+
+ INPUT_LGTH = LENGTH (INPUT);
+ I = INPUT_LGTH;
+ DO WHILE (I >= 1);
+   IF (SUBSTR (INPUT,I,1) ^= ' ') THEN DO;
+     FIRST_ALPHA = I;
+     I = 0;
+   END;
+   ELSE DO;
+     I = I - 1;
+   END;
+ END;
+ IF ((FIRST_ALPHA > 0) & (FIRST_ALPHA < INPUT_LGTH)) THEN
+   INPUT = REPEAT (' ', INPUT_LGTH - FIRST_ALPHA - 1)
+        || (SUBSTR (INPUT, 1, FIRST_ALPHA));
+ END STRRJST;

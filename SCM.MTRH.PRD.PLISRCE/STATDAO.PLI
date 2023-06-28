@@ -1,0 +1,364 @@
+ /* STATDAO  CLSMVS: DRIVER STATUS DATA ACCESS                        */
+ /* OWNING SYSTEM  : DSSM - DRIVER LICENCING SYSTEM                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 2008-08-20 NK   AR51804  ADD RECENT                               */
+ /* 2006-08-22 NK   C16752   ENHANCE AIB RETURN CODE CHECKING         */
+ /* 2006-02-27 NK   C15030   ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /* STATDAO IS THE DATA ACCESS OBJECT FOR THE STAT SEGMENT.           */
+ /* STATDAO IS A COLLECTION OF DR1STAT DATABASE CALLS COMMONLY        */
+ /* USED WITHIN THE DRIVER LICENCING SYSTEM.                          */
+ /*                                                                   */
+ /* @PARAM DAO_CMD                                                    */
+ /*   THE STATCMD TO BE EXECUTED. THE COMMANDS ARE DECLARED, ALONG    */
+ /*   WITH DESCRIPTIONS IN DSSMM.PROD.PLIINCL(STATCMD).               */
+ /*                                                                   */
+ /* @PARAM LNUM                                                       */
+ /*   THE LICENCE NUMBER OF THE DRIVER                                */
+ /*                                                                   */
+ /* @PARAM DR1STAT                                                    */
+ /*   THE STAT SEGMENT DATA USED TO EXECUTE THE COMMAND               */
+ /*                                                                   */
+ /* @PARAM DLIERR                                                     */
+ /*   THE ERROR HANDLER FOR UNEXPECTED DLI CALLS. STATDAO WILL        */
+ /*   CALL DLIERR WHEN THERE IS AN UNEXPECTED RESULT FROM A DLI       */
+ /*   CALL.                                                           */
+ /*                                                                   */
+ /* @SYSMSG                                                           */
+ /*   A SYSTEM MESSAGE DESCRIBING WHY THE STATCMD FAILED.             */
+ /*   SYSMSG IS ONLY SET WHEN FALSE IS RETURNED BY STATDAO OTHERWISE  */
+ /*   IT IS LEFT UNTOUCHED.                                           */
+ /*                                                                   */
+ /* @RETURNS BIT(1)                                                   */
+ /*   RETURNS TRUE, '1'B, IF THE STATCMD COMPLETED SUCCESSFULLY,      */
+ /*   FALSE, '0'B OTHERWISE                                           */
+ /*                                                                   */
+ /*********************************************************************/
+ STATDAO: PROC(DAO_CMD,
+               LNUM,
+               DR1STAT,
+               DLIERR,
+               SYSMSG)
+          RETURNS(BIT(1))
+          REORDER;
+
+ DCL   DAO_CMD             FIXED BINARY(15,0);
+ DCL   LNUM                FIXED BINARY(31,0);
+ DCL 1 DR1STAT,
+       %INCLUDE DRKSTAT;
+       3 DR1STAT_EOS   CHAR(00);
+ DCL   DLIERR              VARIABLE ENTRY(,);
+ DCL   SYSMSG              CHAR(79);
+ DCL   DAO_RC              BIT(1) INIT('1'B);
+
+ DCL   FALSE               BIT(1)  STATIC INIT ('0'B);
+ DCL   TRUE                BIT(1)  STATIC INIT ('1'B);
+
+ %INCLUDE STATCMD;
+ %INCLUDE DLIRC;
+ %INCLUDE AIBSTR;
+ /*------------------------------------------------------------------*/
+ /*  IMS DECLARES
+ /*------------------------------------------------------------------*/
+ DCL 1 AIB                 UNALIGNED,
+  %INCLUDE AIB;
+ DCL CEETDLI               ENTRY EXTERNAL OPTIONS(ASM,INTER);
+ DCL PCBNAME               CHAR(8) STATIC INIT('DR1PCB  ');
+ %INCLUDE STDPARM;
+ DCL 1 DBPCB               UNALIGNED BASED(AIB.AIBRSA1),
+ %INCLUDE DBPCB;
+
+ DCL 1 DR1MST_SSAE         STATIC,
+       3 SEG_NAME          CHAR (08) INIT ('DR1MST  '),
+       3 CMD_QUAL          CHAR (01) INIT ('*'),
+       3 CMD_CODE          CHAR (03) INIT ('---'),
+       3 LP                CHAR (01) INIT ('('),
+       3 FILLER            CHAR (08) INIT ('MSTID   '),
+       3 RO                CHAR (02) INIT (' ='),
+       %INCLUDE DRKMST;
+       3 RP                CHAR (01) INIT (')');
+ DCL 1 DR1STAT_SSAE    STATIC,
+       3 SEG_NAME      CHAR (08) INIT ('DR1STAT '),
+       3 CMD_QUAL      CHAR (01) INIT ('*'),
+       3 CMD_CODE      CHAR (03) INIT ('---'),
+       3 LP            CHAR (01) INIT ('('),
+       3 FILLER        CHAR (08) INIT ('STATID  '),
+       3 RO            CHAR (02) INIT (' ='),
+       %INCLUDE DRKSTAT;
+       3 RP            CHAR (01) INIT (')');
+ DCL 1 DR1STAT_SSAU    STATIC,
+       3 SEG_NAME      CHAR (08) INIT ('DR1STAT '),
+       3 CMD_QUAL      CHAR (01) INIT ('*'),
+       3 CMD_CODE      CHAR (03) INIT ('---'),
+       3 UNQUAL        CHAR (01) INIT (' ');
+
+ /*------------------------------------------------------------------*/
+ /* BUILTIN DECLARES
+ /*------------------------------------------------------------------*/
+ DCL NULL    BUILTIN;
+ DCL STORAGE BUILTIN;
+
+ CALL SETUP();
+ SELECT(DAO_CMD);
+   WHEN (STATCMD.DELETE) DO;
+     CALL GETHOLD();
+     SELECT (DBPCB.STATCD);
+       WHEN ('  ') DO;
+         CALL DELETE();
+         IF (DBPCB.STATCD ^= '  ') THEN DO;
+           CALL SETERR('STATDAO: DELETE ERROR AFTER DELETE');
+         END;
+       END;
+       WHEN ('GE') DO;
+         DAO_RC = FALSE;
+         SYSMSG = '*** DRIVER NOT UPDATED, STATUS ALREADY DELETED';
+       END;
+       OTHERWISE DO;
+         DAO_RC = FALSE;
+         CALL SETERR('STATDAO: DELETE ERROR AFTER GETHOLD');
+       END;
+     END;
+   END;
+
+   WHEN (STATCMD.DELETE_IGNORE) DO;
+     CALL GETHOLD();
+     SELECT (DBPCB.STATCD);
+       WHEN ('  ') DO;
+         CALL DELETE();
+         IF (DBPCB.STATCD ^= '  ') THEN DO;
+           CALL SETERR('STATDAO: DELETE_IGNORE ERROR AFTER DELETE');
+         END;
+       END;
+       WHEN ('GE') DO;
+       END;
+       OTHERWISE DO;
+         CALL SETERR('STATDAO: DELETE_IGNORE ERROR AFTER GETHOLD');
+       END;
+     END;
+   END;
+
+   WHEN (STATCMD.INSERT) DO;
+     CALL INSERT();
+     SELECT (DBPCB.STATCD);
+       WHEN ('  ') DO;
+         DAO_RC = TRUE;
+       END;
+       WHEN ('II') DO;
+         DAO_RC = FALSE;
+         SYSMSG = '*** DRIVER NOT UPDATED, STATUS ALREADY EXISTS';
+       END;
+       OTHERWISE DO;
+         CALL SETERR('STATDAO: INSERT ERROR');
+       END;
+     END;
+   END;
+
+   WHEN (STATCMD.PURGE) DO;
+     CALL PURGE();
+     SELECT (DBPCB.STATCD);
+       WHEN ('GE') DO;
+       END;
+       OTHERWISE DO;
+         CALL SETERR('STATDAO: PURGE ERROR');
+       END;
+     END;
+   END;
+
+   WHEN (STATCMD.RECENT) DO;
+     CALL RECENT();
+     SELECT (DBPCB.STATCD);
+       WHEN ('  ') DO;
+       END;
+       WHEN ('GE') DO;
+         DAO_RC = FALSE;
+         SYSMSG = '*** STATUS NOT FOUND';
+       END;
+       OTHERWISE DO;
+         CALL SETERR('STATDAO: RECENT ERROR');
+       END;
+     END;
+   END;
+
+   OTHERWISE DO;
+     DAO_RC = FALSE;
+     SYSMSG = 'UNKNOWN COMMAND ISSUED TO STATDAO';
+   END;
+ END;
+ RETURN (DAO_RC);
+
+1/*********************************************************************/
+ /*  DELETE: DELETES A STAT SEGMENT
+ /*********************************************************************/
+ DELETE: PROC;
+   CALL CEETDLI(THREE,
+                DLET,
+                AIB,
+                DR1STAT);
+   CALL CHECK_AIB();
+ END DELETE;
+
+1/*********************************************************************/
+ /*  GETHOLD: PREFORMS A GHU ON A STATUS.
+ /*********************************************************************/
+ GETHOLD: PROC;
+   CALL CEETDLI(FIVE,
+                GHU,
+                AIB,
+                DR1STAT,
+                DR1MST_SSAE,
+                DR1STAT_SSAE);
+   CALL CHECK_AIB();
+ END GETHOLD;
+
+1/*********************************************************************/
+ /*  INSERT: INSERTS A STATUS SEGMENT
+ /*********************************************************************/
+ INSERT: PROC;
+   CALL CEETDLI(FIVE,
+                ISRT,
+                AIB,
+                DR1STAT,
+                DR1MST_SSAE,
+                DR1STAT_SSAU);
+   CALL CHECK_AIB();
+ END INSERT;
+
+1/*********************************************************************/
+ /*  PURGE:
+ /*********************************************************************/
+ PURGE: PROC;
+   DCL 1 DR1STAT_SSAXPND     STATIC,
+         3 SEG_NAME          CHAR (8) INIT ('DR1STAT '),
+         3 CMD_QUAL          CHAR (1) INIT ('*'),
+         3 CMD_CODE          CHAR (3) INIT ('---'),
+         3 LP                CHAR (1) INIT ('('),
+         3 FILLER            CHAR (8) INIT ('XPND    '),
+         3 RO                CHAR (2) INIT (' ='),
+         3 SECT              CHAR (1),
+         3 NMCD              CHAR (1),
+         3 NECD              CHAR (4),
+         3 RP                CHAR (1) INIT (')');
+   DR1MST_SSAE.CMD_CODE = 'P--';
+   DR1STAT_SSAXPND.SECT = DR1STAT.SECT;
+   DR1STAT_SSAXPND.NMCD = DR1STAT.NMCD;
+   DR1STAT_SSAXPND.NECD = DR1STAT.NECD;
+   CALL CEETDLI(FIVE,
+                GHU,
+                AIB,
+                DR1STAT,
+                DR1MST_SSAE,
+                DR1STAT_SSAXPND);
+   DO WHILE (DBPCB.STATCD = '  ');
+     CALL CEETDLI(THREE,
+                  DLET,
+                  AIB,
+                  DR1STAT);
+     IF (DBPCB.STATCD = '  ') THEN DO;
+       CALL CEETDLI(FIVE,
+                    GHU,
+                    AIB,
+                    DR1STAT,
+                    DR1MST_SSAE,
+                    DR1STAT_SSAXPND);
+     END;
+   END;
+   DR1MST_SSAE.CMD_CODE = '---';
+ END PURGE;
+
+1/*********************************************************************/
+ /*  RECENT: GETS THE MOST RECENT OCCURANCE OF AN EXPANDED STATUS
+ /*********************************************************************/
+ RECENT: PROC;
+   DCL 1 DR1STAT_SSAXPND     STATIC,
+         3 SEG_NAME          CHAR (8) INIT ('DR1STAT '),
+         3 CMD_QUAL          CHAR (1) INIT ('*'),
+         3 CMD_CODE          CHAR (3) INIT ('L--'),
+         3 LP                CHAR (1) INIT ('('),
+         3 FILLER            CHAR (8) INIT ('XPND    '),
+         3 RO                CHAR (2) INIT (' ='),
+         3 SECT              CHAR (1),
+         3 NMCD              CHAR (1),
+         3 NECD              CHAR (4),
+         3 RP                CHAR (1) INIT (')');
+
+   DR1STAT_SSAXPND.SECT = DR1STAT.SECT;
+   DR1STAT_SSAXPND.NMCD = DR1STAT.NMCD;
+   DR1STAT_SSAXPND.NECD = DR1STAT.NECD;
+   CALL CEETDLI(FIVE,
+                GU,
+                AIB,
+                DR1STAT,
+                DR1MST_SSAE,
+                DR1STAT_SSAXPND);
+   CALL CHECK_AIB();
+ END RECENT;
+
+1/*********************************************************************/
+ /*  SETUP: INITIALIZES AIB, SHARED SSA'S AND RETURN CODE
+ /*********************************************************************/
+ SETUP: PROC;
+   AIB.AIBID = 'DFSAIB  ';
+   AIB.AIBLEN = STORAGE(AIB);
+   AIB.AIBSFUNC = '        ';
+   AIB.AIBRSNM1 = PCBNAME;
+   AIB.AIBRSNM2 = '        ';
+   AIB.RESERVE1.FILL1 = 0;
+   AIB.RESERVE1.FILL2 = 0;
+   AIB.AIBOALEN = STORAGE(DR1STAT);
+   AIB.AIBOAUSE = 0;
+   AIB.RESERVE2.FILL3 = 0;
+   AIB.RESERVE2.FILL4 = 0;
+   AIB.FILL5 = 0;
+   AIB.FILL6 = 0;
+   AIB.AIBRETRN = 0;
+   AIB.AIBREASN = 0;
+   AIB.RESERVE3.FILL7 = 0;
+   AIB.AIBRSA1 = NULL();
+   AIB.AIBRSA2 = NULL();
+   AIB.AIBRSA3 = NULL();
+   AIB.RESERVE4.FILL8 = 0;
+   AIB.RESERVE4.FILL9 = 0;
+   AIB.RESERVE4.FILL10 = 0;
+   AIB.RESERVE4.FILL11 = 0;
+   AIB.RESERVE4.FILL12 = 0;
+   AIB.RESERVE4.FILL13 = 0;
+   AIB.RESERVE4.FILL14 = 0;
+   AIB.RESERVE4.FILL15 = 0;
+   AIB.RESERVE4.FILL16 = 0;
+   AIB.RESERVE4.FILL17 = 0;
+
+   DAO_RC = TRUE;
+   DR1MST_SSAE.LNUM = LNUM;
+   DR1STAT_SSAE.SECT = DR1STAT.SECT;
+   DR1STAT_SSAE.NMCD = DR1STAT.NMCD;
+   DR1STAT_SSAE.NECD = DR1STAT.NECD;
+   DR1STAT_SSAE.EFDT = DR1STAT.EFDT;
+   DR1STAT_SSAE.SRDT = DR1STAT.SRDT;
+ END SETUP;
+
+1/*********************************************************************/
+ /*  SETERR:
+ /*********************************************************************/
+ SETERR: PROC(ERRMSG);
+   DCL ERRMSG CHAR(79);
+   DAO_RC = FALSE;
+   CALL DLIERR(ERRMSG, AIB.AIBRSA1);
+ END SETERR;
+
+1/*********************************************************************/
+ /*  CHECK_AIB:
+ /*********************************************************************/
+ CHECK_AIB: PROC;
+   DCL AIBMSG CHAR(79);
+   IF ^(AIB.AIBRETRN = DLIRC.HEX_0000
+      | AIB.AIBRETRN = DLIRC.HEX_0900) THEN DO;
+     CALL SETERR(AIBSTR(AIB));
+   END;
+ END CHECK_AIB;
+ END STATDAO;

@@ -1,0 +1,40 @@
+ /*  EDTNOVW - EDIT NO VIEW TO CLIENT                                 */
+ EDTNOVW: PROC (PARM_NOVW,                /* IN  NOVW                 */
+                PARM_NOVW_EDITTED,        /* OUT NOVW (EDITTED)       */
+                PARM_ERRMSG)              /* OUT EDIT ERROR MESSAGE   */
+                RETURNS (BIT(01))         /* 0=OK 1=ERROR             */
+                REORDER
+                REDUCIBLE;
+ /*********************************************************************/
+ /*                                                                   */
+ /*  PARAMETER DECLARATIONS                                           */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL PARM_NOVW         CHAR (01);
+ DCL PARM_NOVW_EDITTED CHAR (01);
+ DCL PARM_ERRMSG       CHAR (79);
+ /*********************************************************************/
+ /*                                                                   */
+ /*  EDIT ERROR MESSAGE DECLARATIONS                                  */
+ /*                                                                   */
+ /*********************************************************************/
+ DCL MNOVW01E         CHAR (79) STATIC INIT(
+   'MNOVW01E - NO VIEW TO CLIENT MUST BE V - VIEW OR N - NO VIEW');
+ /*********************************************************************/
+ /*                                                                   */
+ /*  MAINLINE                                                         */
+ /*                                                                   */
+ /*********************************************************************/
+ IF PARM_NOVW = 'V'                                                         TRNU
+  | PARM_NOVW = 'N' THEN                                                    TRNU
+    DO;                                                                     TRNU
+       PARM_NOVW_EDITTED = PARM_NOVW;
+       RETURN ('0'B);
+    END;                                                                    TRNU
+ ELSE                                                                       TRNU
+    DO;                                                                     TRNU
+       PARM_NOVW_EDITTED = ' ';
+       PARM_ERRMSG = MNOVW01E;
+       RETURN ('1'B);
+    END;                                                                 TRNU
+ END EDTNOVW;

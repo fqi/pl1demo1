@@ -1,0 +1,44 @@
+ /* DTFAJ6D  CLSMVS: ADJUST CCYYDDD (JULIAN) DATE BY A NUMBER OF DAYS */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-09-24 SCAY 18311    ORIGINAL                                 */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THIS IS A FRONT END SUBROUTINE TO DTADJLD.                        */
+ /*                                                                   */
+ /*********************************************************************/
+ DTFAJ6D: PROC(IN_DATE, DAYS) RETURNS(PIC'(7)9') REORDER;
+   /*-----------------------------------------------------------------*/
+   /* PARAMETER DECLARATIONS                                          */
+   /*-----------------------------------------------------------------*/
+   DCL IN_DATE             PIC'(7)9';
+   DCL DAYS                FIXED BIN(15);
+   /*-----------------------------------------------------------------*/
+   /* WORKING STORAGE AND BUILT-IN FUNCTION DECLARATIONS              */
+   /*-----------------------------------------------------------------*/
+   DCL RESULT              PIC'(7)9';
+   DCL ADDR                BUILTIN;
+   /*-----------------------------------------------------------------*/
+   /* EXTERNAL SUBROUTINE AND FUNCTION DECLARATIONS                   */
+   /*-----------------------------------------------------------------*/
+   %INCLUDE DTADJLD;
+   /*******************************************************************/
+   /* MAINLINE                                                        */
+   /*******************************************************************/
+   DTADJLD_WORK.INPUT_DATA.INPUT_DT  = IN_DATE;
+   DTADJLD_WORK.INPUT_DATA.DELTA_AMT = DAYS;
+   CALL DTADJLD(DTADJLD_PTR);
+   IF DTADJLD_WORK.OUTPUT_DATA.RETURN_CODE = 0
+   THEN
+      RESULT = DTADJLD_WORK.OUTPUT_DATA.OUTPUT_DT;
+   ELSE
+      RESULT = 0;
+
+   RETURN(RESULT);
+ END DTFAJ6D;
