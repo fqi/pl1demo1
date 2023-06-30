@@ -1,0 +1,20 @@
+ /* SQLCA: SQL COMMUNICATIONS AREA OVERLAY                           */
+ /* OWNING SYSTEM: MTRH - COMMON                                      */
+ /*********************************************************************/
+    3  ERR_SQLCAID                 CHAR (08),      /* EYECATCHER     */
+    3  ERR_SQLCABC                 FIXED BIN (31), /* LENGTH = 136   */
+    3  ERR_SQLCODE                 FIXED BIN (31), /* SQL RETURN CODE*/
+    3  ERR_SQLERRM                 CHAR (70) VARYING,
+                                          /* ERROR MESSAGE VARIABLES */
+    3  ERR_SQLERRP                 CHAR (08),      /* DB2 MODULE NM  */
+    3  ERR_SQLERRD   (6)           FIXED BIN (31), /* DIAGNOSTIC     */
+    3  ERR_SQLWARN0                CHAR (01),      /* "W" IF ANY     */
+    3  ERR_SQLWARN1                CHAR (01),      /* TRUNCATION     */
+    3  ERR_SQLWARN2                CHAR (01),      /* NULLS REMOVED  */
+    3  ERR_SQLWARN3                CHAR (01),      /* VARIABLE LIST  */
+                                                   /* MISMATCH       */
+    3  ERR_SQLWARN4                CHAR (01),      /* "WHERE" MISING */
+    3  ERR_SQLWARN5                CHAR (01),      /* SQL/DS ONLY    */
+    3  ERR_SQLWARN6                CHAR (01),      /* SPARE          */
+    3  ERR_SQLWARN7                CHAR (01),      /* SPARE          */
+    3  ERR_SQLEXT                  CHAR (08);      /* FUTURE USE.    */
