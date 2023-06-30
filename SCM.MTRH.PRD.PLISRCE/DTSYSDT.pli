@@ -1,0 +1,90 @@
+ /* DTSYSDT: CLSMVS: DETERMINE THE SYSTEM DATE                        */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-02-24 HJB  C980241  CREATE                                   */
+ /* 1998-03-30 HJB  C980241  Q.A. CHANGES                             */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THIS ROUTINE IS USED TO DETERMINE THE SYSTEM DATE AND PASS IT     */
+ /* BACK TO THE CALLING PROGRAM IN THE SPECIFIED FORMAT. THE SYSTEM   */
+ /* DATE IS FORMATED BT A CALL TO DTCNVJL IF A JULIAN DATE IS         */
+ /* REQUESTED ELSE A CALL TO DTCNVRT.                                 */
+ /*                                                                   */
+ /*********************************************************************/
+1DTSYSDT: PROC (DTSYSDT_PTR)
+          REORDER;
+1  /*----------------------------------------------------------------*/
+   /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+   /*----------------------------------------------------------------*/
+   %INCLUDE DTSYSDTP;
+   %INCLUDE DTCNVJL;
+   %INCLUDE DTCNVRT;
+   %INCLUDE DTFORMAT;
+   DCL ADDR                       BUILTIN;
+   DCL DATETIME                   BUILTIN;
+   DCL SUBSTR                     BUILTIN;
+   DCL WS_DATE_STRING             CHAR(17);
+   DCL WS_TIME_STR                CHAR(06) INIT(' ');
+   DCL 1 WS_TIME_STR_OL           BASED(ADDR(WS_TIME_STR)),
+         3 HH                     CHAR(02),
+         3 MM                     CHAR(02),
+         3 SS                     CHAR(02);
+   DCL TIME_STR                   CHAR(08) INIT(' ');
+   DCL 1 TIME_STR_OL              BASED(ADDR(TIME_STR)),
+         3 HH                     CHAR(02),
+         3 COLON_1                CHAR(01),
+         3 MM                     CHAR(02),
+         3 COLON_2                CHAR(01),
+         3 SS                     CHAR(02);
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+0DTSYSDT_WORK.OUTPUT_DATA        = '';
+0WS_DATE_STRING                  = DATETIME;
+ CALL A100_FORMAT_OUTPUT;
+ RETURN;
+1/********************************************************************/
+ /*  CALL THE APPROPRIOATE ROUTINE TO FORMAT THE SYSTEM DATE IN THE
+ /*  REQUESTED FORMAT
+ /********************************************************************/
+0A100_FORMAT_OUTPUT: PROC;
+0SELECT(DTSYSDT_WORK.OUTPUT_FORMAT);
+    WHEN(CCYYJJJ_PIC)
+       DO;
+         DTCNVJL_WORK.INPUT_DATE      = SUBSTR(WS_DATE_STRING,1,8);
+         DTCNVJL_WORK.INPUT_FORMAT    = CCYYMMDD;
+         /* AS THE DATE CONTAINS THE CENTURY THE WINDOW LOGIC IS     */
+         /* UNNECESSARY, AND IS THEREFORE SET TO ZERO                */
+         DTCNVJL_WORK.WINDOW_LMT      = 0;
+         CALL DTCNVJL(DTCNVJL_PTR);
+         DTSYSDT_WORK.OUTPUT_DATE_JUL =  DTCNVJL_WORK.OUTPUT_DATE;
+         DTSYSDT_WORK.RETURN_CODE     =  DTCNVJL_WORK.RETURN_CODE;
+       END;
+    OTHERWISE
+       DO;
+         DTCNVRT_WORK.INPUT_DATE      = SUBSTR(WS_DATE_STRING,1,8);
+         DTCNVRT_WORK.INPUT_FORMAT    = CCYYMMDD;
+         DTCNVRT_WORK.OUTPUT_FORMAT   = DTSYSDT_WORK.OUTPUT_FORMAT;
+         /* AS THE DATE CONTAINS THE CENTURY THE WINDOW LOGIC IS     */
+         /* UNNECESSARY, AND IS THEREFORE SET TO ZERO                */
+         DTCNVRT_WORK.WINDOW_LMT      = 0;
+         CALL DTCNVRT(DTCNVRT_PTR);
+         DTSYSDT_WORK.OUTPUT_DATE     =  DTCNVRT_WORK.OUTPUT_DATE;
+         DTSYSDT_WORK.RETURN_CODE     =  DTCNVRT_WORK.RETURN_CODE;
+       END;
+ END;
+ WS_TIME_STR                          = SUBSTR(WS_DATE_STRING,9,6);
+ TIME_STR_OL.HH                       = WS_TIME_STR_OL.HH;
+ TIME_STR_OL.COLON_1                  = ':';
+ TIME_STR_OL.MM                       = WS_TIME_STR_OL.MM;
+ TIME_STR_OL.COLON_2                  = ':';
+ TIME_STR_OL.SS                       = WS_TIME_STR_OL.SS;
+ DTSYSDT_WORK.OUTPUT_TIME             = TIME_STR;
+ END A100_FORMAT_OUTPUT;
+-END DTSYSDT;

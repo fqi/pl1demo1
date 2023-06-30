@@ -1,0 +1,358 @@
+ /* DTEDIT: CLSMVS: EDIT A DATE                                       */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-11-18 HJB  C980214  ADD CCYY = 0 EDIT                        */
+ /* 1998-05-08 HJB  C980214  CREATE                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THE PROCEDURE WILL EDIT A DATE AND RETURN A BIT FIELD INDICATING  */
+ /* THE RESULTS OF THE TEST.                                         `1/
+ /*********************************************************************/
+1DTEDIT: PROC (DTEDIT_PTR) RETURNS(BIT(1))
+          REORDER;
+1  /*----------------------------------------------------------------*/
+   /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+   /*----------------------------------------------------------------*/
+   %INCLUDE DTEDITP;
+   %INCLUDE DTSLIDE;
+   %INCLUDE DTFORMAT;
+   %INCLUDE DTCOMMON;
+   %INCLUDE LEAPYR;
+   DCL WS_CCYYJJJ_DT_OL           PIC'9999999';
+   DCL 1 WS_CCYYJJJ_DT            BASED(ADDR(WS_CCYYJJJ_DT_OL)),
+         3 CC                     PIC'99',
+         3 YY                     PIC'99',
+         3 JJJ                    PIC'999';
+   DCL WS_YYJJJ_DT_OL             PIC'99999';
+   DCL 1 WS_YYJJJ_DT              BASED(ADDR(WS_YYJJJ_DT_OL)),
+         3 YY                     PIC'99',
+         3 JJJ                    PIC'999';
+   DCL ADDR                       BUILTIN;
+   DCL VERIFY                     BUILTIN;
+   DCL WS_YEAR_NUM                FIXED BIN(31) INIT(0);
+   DCL WS_YEAR                    CHAR(04) INIT('    ');
+   DCL 1 WS_YEAR_CHAR             BASED(ADDR(WS_YEAR)),
+         3 WS_CC                  CHAR(02),
+         3 WS_YY                  CHAR(02);
+   DCL WS_YEAR_PIC_OL             PIC '9999' BASED(ADDR(WS_YEAR));
+   DCL 1 WS_YEAR_PIC              BASED(ADDR(WS_YEAR)),
+         3 WS_CC_PIC              PIC'99',
+         3 WS_YY_PIC              PIC'99';
+   DCL WS_WINDOW_LMT_CHAR         CHAR(02)
+                                  BASED(ADDR(DTEDIT_WORK.WINDOW_LMT));
+   DCL WS_MM                      CHAR(02) INIT('  ');
+   DCL WS_MM_PIC                  PIC'99'  BASED(ADDR(WS_MM));
+   DCL WS_MMM                     CHAR(03) INIT('   ');
+   DCL WS_JJJ                     PIC'999' INIT(0);
+   DCL WS_DD                      CHAR(02) INIT('  ');
+   DCL WS_DD_PIC                  PIC'99'  BASED(ADDR(WS_DD));
+   DCL WS_DASH1                   CHAR(01) INIT(' ');
+   DCL WS_DASH2                   CHAR(01) INIT(' ');
+   DCL WS_MONTHS(12)              CHAR(03) INIT('JAN','FEB','MAR',
+                                                'APR','MAY','JUN',
+                                                'JUL','AUG','SEP',
+                                                'OCT','NOV','DEC');
+   DCL WS_DAYS_IN_YEAR            FIXED BIN(15) INIT(365);
+   DCL WS_DAYS_IN_MTH(12)         PIC'99'  INIT(31,28,31,30,31,30,
+                                                31,31,30,31,30,31);
+   DCL I                          FIXED BIN(15) INIT(0);
+   DCL WS_FOUND                   BIT(1) INIT('0'B);
+   DCL WS_NO                      BIT(1) INIT('0'B);
+   DCL WS_YES                     BIT(1) INIT('1'B);
+   DCL WS_PASS_EDIT               BIT(1) INIT('1'B);
+   DCL NUMERIC                    CHAR(10) INIT('0123456789');
+   DCL WS_ERRMSG_01               CHAR(79) INIT
+   ('DTEDIT_001E - YY MUST BE NUMERIC');
+   DCL WS_ERRMSG_02               CHAR(79) INIT
+   ('DTEDIT_002E - CC MUST BE NUMERIC');
+   DCL WS_ERRMSG_03               CHAR(79) INIT
+   ('DTEDIT_003E - MMM NOT A VALID MONTH ABBREVATION');
+   DCL WS_ERRMSG_04               CHAR(79) INIT
+   ('DTEDIT_004E - MM MUST BE NUMERIC');
+   DCL WS_ERRMSG_05               CHAR(79) INIT
+   ('DTEDIT_005E - MM MUST BETWEEN 01 AND 12 INCLUSIVE');
+   DCL WS_ERRMSG_06               CHAR(79) INIT
+   ('DTEDIT_006E - DD MUST BE NUMERIC');
+   DCL WS_ERRMSG_07               CHAR(79) INIT
+   ('DTEDIT_007E - DD NOT A VALID DATE IN THE MONTH SPECIFIED');
+   DCL WS_ERRMSG_08               CHAR(79) INIT
+   ('DTEDIT_008E - JJJ NOT A VALID DAY IN THE YEAR SPECIFIED');
+   DCL WS_ERRMSG_09               CHAR(79) INIT
+   ('DTEDIT_009E - INVALID INPUT FORMAT SPECIFIED');
+   DCL WS_ERRMSG_10               CHAR(79) INIT
+   ('DTEDIT_010E - INVALID DB2 DATE FIELD');
+   DCL WS_ERRMSG_11               CHAR(79) INIT
+   ('DTEDIT_011E - INVALID WINDOW LIMIT SPECIFIED');
+   DCL WS_ERRMSG_12               CHAR(79) INIT
+   ('DTEDIT_012E - INVALID YEAR SPECIFED FOR YYJJJ DATE');
+   DCL WS_ERRMSG_13               CHAR(79) INIT
+   ('DTEDIT_013E - CCYY CANNOT BE 0000');
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+0IF VERIFY(WS_WINDOW_LMT_CHAR,NUMERIC) ^= 0
+ THEN
+    DO;
+       DTEDIT_WORK.RETURN_CODE   = 8;
+       DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_11;
+       RETURN(WS_NO);
+    END;
+0DTEDIT_WORK.OUTPUT_DATA        = '';
+ WS_DATE_PTR                     = ADDR(WS_DATE_STRING);
+ WS_DATE_STRING                  = DTEDIT_WORK.INPUT_DATE;
+ WS_YYJJJ_DT_OL,
+ WS_CCYYJJJ_DT_OL                = DTEDIT_WORK.JUL_INPUT_DATE;
+ CALL A100_PROCESS_INPUT;
+ IF WS_PASS_EDIT
+ THEN
+    CALL B100_EDIT_DATE;
+ RETURN(WS_PASS_EDIT);
+1/********************************************************************/
+ /*  PARSE THE INPUT DATE INTO DAY, MONTH, YEAR AND CENTURY FIELDS
+ /********************************************************************/
+0A100_PROCESS_INPUT: PROC;
+0SELECT(INPUT_FORMAT);
+0   WHEN(DDMMYY)
+       DO;
+         WS_DD                   = WS_DDMMYY_DT.DD;
+         WS_MM                   = WS_DDMMYY_DT.MM;
+         WS_YY                   = WS_DDMMYY_DT.YY;
+       END;
+0   WHEN(DDMMMYY)
+       DO;
+         WS_DD                   = WS_DDMMMYY_DT.DD;
+         WS_MMM                  = WS_DDMMMYY_DT.MMM;
+         WS_YY                   = WS_DDMMMYY_DT.YY;
+       END;
+0   WHEN(YYMMDD)
+       DO;
+         WS_DD                   = WS_YYMMDD_DT.DD;
+         WS_MM                   = WS_YYMMDD_DT.MM;
+         WS_YY                   = WS_YYMMDD_DT.YY;
+       END;
+0   WHEN(YYMMMDD)
+       DO;
+         WS_DD                   = WS_YYMMMDD_DT.DD;
+         WS_MMM                  = WS_YYMMMDD_DT.MMM;
+         WS_YY                   = WS_YYMMMDD_DT.YY;
+       END;
+0   WHEN(YY_MM_DD)
+       DO;
+         WS_DD                   = WS_YY_MM_DD_DT.DD;
+         WS_DASH1                = WS_YY_MM_DD_DT.D1;
+         WS_MM                   = WS_YY_MM_DD_DT.MM;
+         WS_DASH2                = WS_YY_MM_DD_DT.D2;
+         WS_YY                   = WS_YY_MM_DD_DT.YY;
+       END;
+0   WHEN(DDMMCCYY)
+       DO;
+         WS_DD                   = WS_DDMMCCYY_DT.DD;
+         WS_MM                   = WS_DDMMCCYY_DT.MM;
+         WS_YY                   = WS_DDMMCCYY_DT.YY;
+         WS_CC                   = WS_DDMMCCYY_DT.CC;
+       END;
+0   WHEN(DDMMMCCYY)
+       DO;
+         WS_DD                   = WS_DDMMMCCYY_DT.DD;
+         WS_MMM                  = WS_DDMMMCCYY_DT.MMM;
+         WS_YY                   = WS_DDMMMCCYY_DT.YY;
+         WS_CC                   = WS_DDMMMCCYY_DT.CC;
+       END;
+0   WHEN(CCYYMMDD)
+       DO;
+         WS_DD                   = WS_CCYYMMDD_DT.DD;
+         WS_MM                   = WS_CCYYMMDD_DT.MM;
+         WS_YY                   = WS_CCYYMMDD_DT.YY;
+         WS_CC                   = WS_CCYYMMDD_DT.CC;
+       END;
+0   WHEN(CCYYMMMDD)
+       DO;
+         WS_DD                   = WS_CCYYMMMDD_DT.DD;
+         WS_MMM                  = WS_CCYYMMMDD_DT.MMM;
+         WS_YY                   = WS_CCYYMMMDD_DT.YY;
+         WS_CC                   = WS_CCYYMMMDD_DT.CC;
+       END;
+0   WHEN(CCYY_MM_DD)
+       DO;
+         WS_DD                   = WS_CCYY_MM_DD_DT.DD;
+         WS_DASH1                = WS_CCYY_MM_DD_DT.D1;
+         WS_MM                   = WS_CCYY_MM_DD_DT.MM;
+         WS_DASH2                = WS_CCYY_MM_DD_DT.D2;
+         WS_YY                   = WS_CCYY_MM_DD_DT.YY;
+         WS_CC                   = WS_CCYY_MM_DD_DT.CC;
+       END;
+0   WHEN(CCYYJJJ_PIC)
+       DO;
+         WS_JJJ                  = WS_CCYYJJJ_DT.JJJ;
+         WS_YY                   = WS_CCYYJJJ_DT.YY;
+         WS_CC                   = WS_CCYYJJJ_DT.CC;
+       END;
+0   WHEN(YYJJJ_PIC)
+       DO;
+         WS_JJJ                  = WS_YYJJJ_DT.JJJ;
+         WS_YY                   = WS_YYJJJ_DT.YY;
+       END;
+0   OTHERWISE
+    DO;
+       DTEDIT_WORK.RETURN_CODE   = 8;
+       DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_09;
+       WS_PASS_EDIT = WS_NO;
+    END;
+0END;
+ END A100_PROCESS_INPUT;
+1/********************************************************************/
+ /*  EDIT THE PARSED DATE FIELDS
+ /********************************************************************/
+0B100_EDIT_DATE: PROC;
+ IF DTEDIT_WORK.INPUT_FORMAT = YYJJJ_PIC
+ THEN
+    IF WS_CCYYJJJ_DT.CC ^= 0
+    THEN
+       DO;
+          DTEDIT_WORK.RETURN_CODE   = 8;
+          DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_12;
+          WS_PASS_EDIT = WS_NO;
+          RETURN;
+       END;
+0IF VERIFY(WS_YY,NUMERIC) = 0
+ THEN
+    IF DTEDIT_WORK.INPUT_FORMAT = YY_MM_DD |
+       DTEDIT_WORK.INPUT_FORMAT = YYMMDD   |
+       DTEDIT_WORK.INPUT_FORMAT = YYMMMDD  |
+       DTEDIT_WORK.INPUT_FORMAT = DDMMYY   |
+       DTEDIT_WORK.INPUT_FORMAT = DDMMMYY  |
+       DTEDIT_WORK.INPUT_FORMAT = YYJJJ_PIC
+    THEN
+       DO;
+          DTSLIDE_WORK.WINDOW_LMT         = DTEDIT_WORK.WINDOW_LMT;
+          DTSLIDE_WORK.INPUT_YY           = WS_YY_PIC;
+          CALL DTSLIDE(DTSLIDE_PTR);
+          WS_YEAR                         = DTSLIDE_WORK.OUTPUT_YEAR;
+          DTEDIT_WORK.RETURN_CODE         = DTSLIDE_WORK.RETURN_CODE;
+       END;
+    ELSE;
+0ELSE
+    DO;
+       DTEDIT_WORK.RETURN_CODE   = 8;
+       DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_01;
+       WS_PASS_EDIT = WS_NO;
+       RETURN;
+    END;
+0IF VERIFY(WS_CC,NUMERIC) ^= 0
+ THEN
+    DO;
+       DTEDIT_WORK.RETURN_CODE   = 8;
+       DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_02;
+       WS_PASS_EDIT = WS_NO;
+       RETURN;
+    END;
+0IF WS_YEAR_PIC_OL = 0
+ THEN
+   DO;
+     DTEDIT_WORK.RETURN_CODE   = 8;
+     DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_13;
+     WS_PASS_EDIT = WS_NO;
+     RETURN;
+   END;
+ WS_YEAR_NUM                     = WS_YEAR_PIC_OL;
+ IF LEAPYR(WS_YEAR_NUM)
+ THEN
+    DO;
+       WS_DAYS_IN_MTH(2) = 29;
+       WS_DAYS_IN_YEAR   = 366;
+    END;
+0IF (DTEDIT_WORK.INPUT_FORMAT = DDMMMYY    |
+     DTEDIT_WORK.INPUT_FORMAT = YYMMMDD    |
+     DTEDIT_WORK.INPUT_FORMAT = DDMMMCCYY |
+     DTEDIT_WORK.INPUT_FORMAT = CCYYMMMDD)
+ THEN
+    DO;
+       WS_FOUND = '0'B;
+0      /* LOOP THROUGH THE ARRAY OF ABBR UNTIL A MATCH IS FOUND       */
+0      DO I = 1 TO 12 WHILE(^WS_FOUND);
+          IF WS_MONTHS(I) = WS_MMM
+          THEN
+             DO;
+                WS_MM_PIC = I;
+                WS_FOUND  = '1'B;
+             END;
+       END;
+0      /* IF NO MATCH HAS BEEN FOUND THEN INDICATE AN ERROR           */
+0      IF ^WS_FOUND
+       THEN
+          DO;
+             DTEDIT_WORK.RETURN_CODE   = 8;
+             DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_03;
+             WS_PASS_EDIT = WS_NO;
+             RETURN;
+          END;
+    END;
+0IF ^(DTEDIT_WORK.INPUT_FORMAT = CCYYJJJ_PIC |
+      DTEDIT_WORK.INPUT_FORMAT = YYJJJ_PIC)
+ THEN
+    DO;
+0      IF VERIFY(WS_MM,NUMERIC) = 0
+       THEN
+          IF WS_MM_PIC < 1 | WS_MM_PIC > 12
+          THEN
+             DO;
+                DTEDIT_WORK.RETURN_CODE   = 8;
+                DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_05;
+                WS_PASS_EDIT = WS_NO;
+                RETURN;
+             END;
+          ELSE;
+       ELSE
+          DO;
+             DTEDIT_WORK.RETURN_CODE   = 8;
+             DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_04;
+             WS_PASS_EDIT = WS_NO;
+             RETURN;
+          END;
+0      IF VERIFY(WS_DD,NUMERIC) = 0
+       THEN
+          IF WS_DD_PIC < 1 | WS_DD_PIC > WS_DAYS_IN_MTH(WS_MM_PIC)
+          THEN
+             DO;
+                DTEDIT_WORK.RETURN_CODE   = 8;
+                DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_07;
+                WS_PASS_EDIT = WS_NO;
+                RETURN;
+             END;
+          ELSE;
+       ELSE
+          DO;
+             DTEDIT_WORK.RETURN_CODE   = 8;
+             DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_06;
+             WS_PASS_EDIT = WS_NO;
+             RETURN;
+          END;
+    END;
+ ELSE
+    IF WS_JJJ < 1 | WS_JJJ > WS_DAYS_IN_YEAR
+    THEN
+       DO;
+          DTEDIT_WORK.RETURN_CODE   = 8;
+          DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_08;
+          WS_PASS_EDIT = WS_NO;
+          RETURN;
+       END;
+ IF DTEDIT_WORK.INPUT_FORMAT = CCYY_MM_DD |
+    DTEDIT_WORK.INPUT_FORMAT = YY_MM_DD
+ THEN
+    IF WS_DASH1 ^= '-' | WS_DASH2 ^= '-'
+    THEN
+       DO;
+          DTEDIT_WORK.RETURN_CODE   = 8;
+          DTEDIT_WORK.ERROR_MESSAGE = WS_ERRMSG_10;
+          WS_PASS_EDIT = WS_NO;
+          RETURN;
+       END;
+ END B100_EDIT_DATE;
+-END DTEDIT;

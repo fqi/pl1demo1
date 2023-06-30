@@ -1,0 +1,114 @@
+ /* DTADJLD: CLSMVS: ADJUST A JULIAN DATE BT DELTA DAYS               */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-04-08 HJB  C980411  CREATE                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THIS MODULE READS IN A JULAIN DATE IN THE FORMAT CCYYJJJ          */
+ /* AND ADJUSTS IT BY THE NUMBER OF DAYS SPECIFIED BY THE FIELD       */
+ /* DELTA_AMT.                                                        */
+ /*                                                                   */
+ /*********************************************************************/
+1DTADJLD: PROC (DTADJLD_PTR)
+          REORDER;
+1  /*----------------------------------------------------------------*/
+   /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+   /*----------------------------------------------------------------*/
+   %INCLUDE DTADJLDP;
+   %INCLUDE DTEDIT;
+   %INCLUDE DTFORMAT;
+   %INCLUDE LEAPYR;
+   DCL ADDR                       BUILTIN;
+   DCL ABS                        BUILTIN;
+   DCL SUBSTR                     BUILTIN;
+   DCL 1 WS_WORK_DT,
+         3 CCYY                   FIXED BIN(31),
+         3 JJJ                    FIXED BIN(31);
+   DCL WS_INPUT_DT_PIC            PIC'(7)9';
+   DCL 1 WS_INPUT_DT_PIC_OL       BASED(ADDR(WS_INPUT_DT_PIC)),
+         3 CCYY                   PIC'9999',
+         3 JJJ                    PIC'999';
+   DCL WS_DAYS_TO_ADJUST          FIXED BIN(31);
+   DCL WS_DAYS_IN_YEAR            FIXED BIN(31) INIT(0);
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+0  DTADJLD_WORK.OUTPUT_DATA = '';
+   DTEDIT_WORK = '';
+   DTEDIT_WORK.JUL_INPUT_DATE = DTADJLD_WORK.INPUT_DT;
+   DTEDIT_WORK.INPUT_FORMAT   = CCYYJJJ_PIC;
+   IF ^(DTEDIT(DTEDIT_PTR))
+   THEN
+      DO;
+         DTADJLD_WORK.RETURN_CODE = DTEDIT_WORK.RETURN_CODE;
+         DTADJLD_WORK.OUTPUT_DT = 0;
+         RETURN;
+      END;
+   WS_INPUT_DT_PIC   = DTADJLD_WORK.INPUT_DT;
+   WS_WORK_DT.CCYY  = WS_INPUT_DT_PIC_OL.CCYY;
+   WS_WORK_DT.JJJ   = WS_INPUT_DT_PIC_OL.JJJ;
+   WS_DAYS_TO_ADJUST = ABS(DTADJLD_WORK.DELTA_AMT);
+   IF DTADJLD_WORK.DELTA_AMT > 0
+   THEN
+      CALL A100_ADD_DAYS;
+   ELSE
+      CALL A200_SUBTRACT_DAYS;
+   WS_INPUT_DT_PIC_OL.CCYY = WS_WORK_DT.CCYY;
+   WS_INPUT_DT_PIC_OL.JJJ  = WS_WORK_DT.JJJ;
+   DTADJLD_WORK.OUTPUT_DT  = WS_INPUT_DT_PIC;
+   RETURN;
+1/********************************************************************/
+ /*  ADD THE NUMBER OF DAYS SPECIFIED TO THE INPUT DATE
+ /********************************************************************/
+0A100_ADD_DAYS: PROC;
+0DO WHILE(WS_DAYS_TO_ADJUST ^= 0);
+    IF LEAPYR(WS_WORK_DT.CCYY)
+    THEN
+       WS_DAYS_IN_YEAR = 366;
+    ELSE
+       WS_DAYS_IN_YEAR = 365;
+    IF WS_DAYS_TO_ADJUST + WS_WORK_DT.JJJ > WS_DAYS_IN_YEAR
+    THEN
+       DO;
+          WS_WORK_DT.CCYY = WS_WORK_DT.CCYY + 1;
+          WS_DAYS_TO_ADJUST = WS_DAYS_TO_ADJUST -
+                             (WS_DAYS_IN_YEAR - WS_WORK_DT.JJJ);
+          WS_WORK_DT.JJJ = 0;
+       END;
+    ELSE
+       DO;
+          WS_WORK_DT.JJJ = WS_WORK_DT.JJJ + WS_DAYS_TO_ADJUST;
+          WS_DAYS_TO_ADJUST = 0;
+       END;
+ END;
+ END A100_ADD_DAYS;
+1/********************************************************************/
+ /*  SUBTRACT THE NUMBER OF DAYS SPECIFIED TO THE INPUT DATE
+ /********************************************************************/
+0A200_SUBTRACT_DAYS: PROC;
+0DO WHILE(WS_DAYS_TO_ADJUST ^= 0);
+    IF ABS(WS_DAYS_TO_ADJUST) >= WS_WORK_DT.JJJ
+    THEN
+       DO;
+          WS_WORK_DT.CCYY = WS_WORK_DT.CCYY - 1;
+          WS_DAYS_TO_ADJUST = WS_DAYS_TO_ADJUST - WS_WORK_DT.JJJ;
+          IF LEAPYR(WS_WORK_DT.CCYY)
+          THEN
+              WS_WORK_DT.JJJ = 366;
+           ELSE
+              WS_WORK_DT.JJJ = 365;
+       END;
+    ELSE
+       DO;
+          WS_WORK_DT.JJJ = WS_WORK_DT.JJJ - WS_DAYS_TO_ADJUST;
+          WS_DAYS_TO_ADJUST = 0;
+       END;
+ END;
+ END A200_SUBTRACT_DAYS;
+-END DTADJLD;

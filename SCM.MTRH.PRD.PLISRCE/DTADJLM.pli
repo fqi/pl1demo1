@@ -1,0 +1,88 @@
+ /* DTADJLM: CLSMVS: ADJUST A JULIAN DATE BT DELTA MONTHE             */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-04-14 HJB  C980411  CREATE                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THIS MODULE READS IN A JULIAN DATE IN THE FORMAT CCYYJJJ          */
+ /* AND ADJUSTS IT BY THE NUMBER OF MONTHS SPECIFIED BY THE FIELD     */
+ /* DELTA_AMT.                                                        */
+ /*                                                                   */
+ /*********************************************************************/
+1DTADJLM: PROC (DTADJLM_PTR)
+          REORDER;
+0/*----------------------------------------------------------------*/
+ /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+ /*----------------------------------------------------------------*/
+ %INCLUDE DTADJLMP;
+ %INCLUDE DTADGRM;
+ %INCLUDE DTCNVCH;
+ %INCLUDE DTCNVJL;
+ %INCLUDE DTEDIT;
+ %INCLUDE DTFORMAT;
+  DCL ADDR   BUILTIN;
+  DCL SUBSTR BUILTIN;
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+   DTADJLM_WORK.OUTPUT_DATA = '';
+   DTADGRM_WORK = '';
+   DTCNVCH_WORK = '';
+   DTCNVJL_WORK = '';
+   DTEDIT_WORK = '';
+   DTEDIT_WORK.JUL_INPUT_DATE   = DTADJLM_WORK.INPUT_DT;
+   DTEDIT_WORK.INPUT_FORMAT = CCYYJJJ_PIC;
+   IF ^(DTEDIT(DTEDIT_PTR))
+   THEN
+      DO;
+         DTADJLM_WORK.RETURN_CODE = DTEDIT_WORK.RETURN_CODE;
+         DTADJLM_WORK.OUTPUT_DT = 0;
+         RETURN;
+      END;
+0/********************************************************************/
+ /*  CONVERT TO A GREGORIAN DATE (CCYY-MM-DD)
+ /********************************************************************/
+   DTCNVCH_WORK.INPUT_DATE    = DTADJLM_WORK.INPUT_DT;
+   DTCNVCH_WORK.OUTPUT_FORMAT = CCYY_MM_DD;
+   CALL DTCNVCH(DTCNVCH_PTR);
+   IF DTCNVCH_WORK.RETURN_CODE ^= 0
+   THEN
+      DO;
+         DTADJLM_WORK.RETURN_CODE = DTCNVCH_WORK.RETURN_CODE;
+         DTADJLM_WORK.OUTPUT_DT = 0;
+         RETURN;
+      END;
+0/********************************************************************/
+ /*  ADJUST THE GREGORIAN DATE
+ /********************************************************************/
+   DTADGRM_WORK.INPUT_DT      = SUBSTR(DTCNVCH_WORK.OUTPUT_DATE,1,10);
+   DTADGRM_WORK.DELTA_AMT     = DTADJLM_WORK.DELTA_AMT;
+   CALL DTADGRM(DTADGRM_PTR);
+   IF DTADGRM_WORK.RETURN_CODE ^= 0
+   THEN
+      DO;
+         DTADJLM_WORK.RETURN_CODE = DTADGRM_WORK.RETURN_CODE;
+         DTADJLM_WORK.OUTPUT_DT = 0;
+         RETURN;
+      END;
+0/********************************************************************/
+ /*  CONVERT THE ADJUSTED GREGORIAN DATE TO A JULIAN DATE
+ /********************************************************************/
+   DTCNVJL_WORK.INPUT_DATE    = DTADGRM_WORK.OUTPUT_DT;
+   DTCNVJL_WORK.INPUT_FORMAT  = CCYY_MM_DD;
+   CALL DTCNVJL(DTCNVJL_PTR);
+   IF DTCNVJL_WORK.RETURN_CODE ^= 0
+   THEN
+      DO;
+         DTADJLM_WORK.RETURN_CODE = DTCNVJL_WORK.RETURN_CODE;
+         DTADJLM_WORK.OUTPUT_DT = 0;
+         RETURN;
+      END;
+   DTADJLM_WORK.OUTPUT_DT     = DTCNVJL_WORK.OUTPUT_DATE;
+ END DTADJLM;
