@@ -1,0 +1,17 @@
+0/*********************************************************************/
+ /* DTADGRMP: ADJUST A GREGORIAN DATE BY DELTA NUMBER OF MONTHS       */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  ID      WHAT                                      */
+ /* ---------- ---- ------- ----------------------------------------- */
+ /* 1998-04-08 HJB  C980411 ORIGINAL                                  */
+ /*********************************************************************/
+ DCL DTADGRM_STR          CHAR(48);
+ DCL 1 DTADGRM_WORK       BASED(DTADGRM_PTR),
+       2 INPUT_DATA,
+         3 INPUT_DT          CHAR(10),
+         3 DELTA_AMT         FIXED DEC(5,0),
+       2 OUTPUT_DATA,
+         3 OUTPUT_DT         CHAR(10),
+         3 RETURN_CODE       FIXED BIN(15);
+ DCL DTADGRM_PTR             POINTER;

@@ -1,0 +1,17 @@
+0/*********************************************************************/
+ /* DTSLIDEP: CALCULATE CENTURY FOR A TWO DIGIT YEAR                  */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  ID      WHAT                                      */
+ /* ---------- ---- ------- ----------------------------------------- */
+ /* 1998-02-25 HJB  C980241 ORIGINAL                                  */
+ /*********************************************************************/
+ DCL DTSLIDE_STR          CHAR(10);
+ DCL 1 DTSLIDE_WORK       BASED(DTSLIDE_PTR),
+       2 INPUT_DATA,
+         3 INPUT_YY          PIC'99',
+         3 WINDOW_LMT        PIC'99',
+       2 OUTPUT_DATA,
+         3 OUTPUT_YEAR       PIC'9999',
+         3 RETURN_CODE       FIXED BIN(15);
+ DCL DTSLIDE_PTR             POINTER;

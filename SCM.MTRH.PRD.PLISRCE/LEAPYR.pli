@@ -1,0 +1,22 @@
+ /* LEAPYR   CLSMVS: LEAP YEAR DETERMINATION                          */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-10-16 GHAY C18706   STANDARDIZE ANCIENT UNCOMMENTED CODE     */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                  LEAP YEAR DETERMINATION                          */
+ /*********************************************************************/
+ LEAPYR: PROC(CCYY) RETURNS(BIT(01));
+ DEFAULT RANGE(*) STATIC;
+ DCL CCYY  FIXED BIN(31);
+ DCL MOD   BUILTIN;
+ IF MOD(CCYY,400) = 0 | (MOD(CCYY,100) ^= 0 & MOD(CCYY,4) = 0) THEN
+   RETURN('1'B);
+ ELSE
+   RETURN('0'B);
+ END LEAPYR;

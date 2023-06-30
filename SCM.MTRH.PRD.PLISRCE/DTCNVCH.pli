@@ -1,0 +1,136 @@
+ /* DTCNVCH: CLSMVS: CONVERT A JULIAN DATE TO A CHARACTER FORMAT DATE */
+ /* SPECIFIED BY THE OUTPUT FORMAT PARAMTER                           */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-02-24 HJB  C980241  CREATE                                   */
+ /* 1998-03-30 HJB  C980241  Q.A. CHANGES                             */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THIS MODULE READS IN A JULIAN DATE IN THE FORMAT CCYYDDD AND      */
+ /* REFORMATS IT INTO THE FORMAT SPECIFIED IN THE OUTPUT FORMAT       */
+ /* PARAMETER.                                                        */
+ /*                                                                   */
+ /*********************************************************************/
+1DTCNVCH: PROC (DTCNVCH_PTR)
+          REORDER;
+0/*----------------------------------------------------------------*/
+ /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+ /*----------------------------------------------------------------*/
+ %INCLUDE DTCNVCHP;
+ %INCLUDE DTFORMAT;
+ %INCLUDE DTCNVRT;
+ %INCLUDE DTEDIT;
+ %INCLUDE LEAPYR;
+ DCL ADDR                         BUILTIN;
+ DCL VERIFY                       BUILTIN;
+ DCL WS_CCYYMMDD_DT               CHAR(08);
+ DCL 1 WS_CCYYMMDD_OL             BASED(ADDR(WS_CCYYMMDD_DT)),
+       3 CC                       CHAR(02),
+       3 YY                       CHAR(02),
+       3 MM                       CHAR(02),
+       3 DD                       CHAR(02);
+ DCL JULIAN_DT                    PIC'(7)9';
+ DCL INPUT_DATE_CHAR              CHAR(07)
+                                  BASED(ADDR(DTCNVCH_WORK.INPUT_DATE));
+ DCL 1 WS_CCYYJJJ                 BASED(ADDR(JULIAN_DT)),
+       3 CC                       PIC'99',
+       3 YY                       PIC'99',
+       3 JJJ                      PIC'999';
+ DCL 1 WS_YEAR_CHAR               BASED(ADDR(JULIAN_DT)),
+       3 WS_CC                    CHAR(02),
+       3 WS_YY                    CHAR(02);
+ DCL 1 WS_YEAR_PIC                BASED(ADDR(JULIAN_DT)),
+       3 WS_CC_PIC                PIC'99',
+       3 WS_YY_PIC                PIC'99';
+ DCL WS_YEAR_PIC_OL               PIC'9999' BASED(ADDR(JULIAN_DT));
+ DCL WS_YEAR_NUM                  FIXED BIN(31);
+ DCL WS_CC                        CHAR(02);
+ DCL WS_CC_PIC                    PIC'99'  BASED(ADDR(WS_CC));
+ DCL WS_YY                        CHAR(02);
+ DCL WS_YY_PIC                    PIC'99'  BASED(ADDR(WS_YY));
+ DCL WS_MM                        CHAR(02) INIT('00');
+ DCL WS_MM_PIC                    PIC'99'  BASED(ADDR(WS_MM));
+ DCL WS_DD                        CHAR(02) INIT('00');
+ DCL WS_DD_PIC                    PIC'99' BASED(ADDR(WS_DD));
+ DCL WS_JJJ                       PIC'999';
+ DCL WS_DAYS_IN_MTH(12)           PIC'99'  INIT(31,28,31,30,31,30,
+                                                31,31,30,31,30,31);
+ DCL I                            FIXED BIN(15);
+ DCL NUMERIC                      CHAR(10) INIT('1234567890');
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+0DTCNVCH_WORK.OUTPUT_DATA       = '';
+0IF VERIFY(INPUT_DATE_CHAR,NUMERIC) ^=  0
+ THEN
+    DO;
+       DTCNVCH_WORK.OUTPUT_DATE       = '';
+       DTCNVCH_WORK.RETURN_CODE       = 8;
+       RETURN;
+    END;
+ DTEDIT_WORK = '';
+ DTEDIT_WORK.JUL_INPUT_DATE = DTCNVCH_WORK.INPUT_DATE;
+ DTEDIT_WORK.INPUT_FORMAT   = CCYYJJJ_PIC;
+ DTEDIT_WORK.WINDOW_LMT     = 0;
+ IF ^(DTEDIT(DTEDIT_PTR))
+ THEN
+    DO;
+       DTCNVCH_WORK.RETURN_CODE = DTEDIT_WORK.RETURN_CODE;
+       DTCNVCH_WORK.OUTPUT_DATE = '';
+       RETURN;
+    END;
+0JULIAN_DT                       = DTCNVCH_WORK.INPUT_DATE;
+ WS_YEAR_NUM                     = WS_YEAR_PIC_OL;
+ WS_CC_PIC                       = WS_CCYYJJJ.CC;
+ WS_YY_PIC                       = WS_CCYYJJJ.YY;
+ WS_JJJ                          = WS_CCYYJJJ.JJJ;
+0/* DETERMINE WHETHER THIS IS A LEAP YEAR AND UPDATE THE NUMBER OF    */
+ /* IN FEBRUARY IF IT IS.                                             */
+0IF LEAPYR(WS_YEAR_NUM)
+ THEN
+    WS_DAYS_IN_MTH(2) = 29;
+0/* CONVERT THE DAY OF THE YEAR(JJJ) TO THE MONTH AND DAY IN THE      */
+ /* YEAR                                                              */
+ DO I = 1 TO 12 WHILE(WS_JJJ > 0);
+    IF WS_JJJ > WS_DAYS_IN_MTH(I)
+    THEN
+       WS_JJJ = WS_JJJ - WS_DAYS_IN_MTH(I);
+    ELSE
+       DO;
+          WS_MM_PIC = I;
+          WS_DD_PIC = WS_JJJ;
+          WS_JJJ    = 0;
+       END;
+ END;
+0/* IF THE MONTH AND DAY HAS NOT BEEN CALCULATED INDICATE AN ERROR    */
+ IF WS_JJJ ^= 0
+ THEN
+    DO;
+       DTCNVCH_WORK.OUTPUT_DATE       = '';
+       DTCNVCH_WORK.RETURN_CODE       = 8;
+    END;
+0/* FORMAT THE DATE IN THE FORMAT REQUESTED                           */
+0ELSE
+    DO;
+       WS_CCYYMMDD_OL.CC              = WS_CC;
+       WS_CCYYMMDD_OL.YY              = WS_YY;
+       WS_CCYYMMDD_OL.MM              = WS_MM;
+       WS_CCYYMMDD_OL.DD              = WS_DD;
+       DTCNVRT_WORK.INPUT_DATE        = WS_CCYYMMDD_DT;
+       DTCNVRT_WORK.INPUT_FORMAT      = CCYYMMDD;
+       DTCNVRT_WORK.OUTPUT_FORMAT     = DTCNVCH_WORK.OUTPUT_FORMAT;
+       /* AS THE DATE CONTAINS THE CENTURY THE WINDOW LOGIC IS        */
+       /* UNNECESSARY, AND IS THEREFORE SET TO ZERO                   */
+       DTCNVRT_WORK.WINDOW_LMT        = 0;
+       CALL DTCNVRT(DTCNVRT_PTR);
+       DTCNVCH_WORK.OUTPUT_DATE       = DTCNVRT_WORK.OUTPUT_DATE;
+       DTCNVCH_WORK.RETURN_CODE       = DTCNVRT_WORK.RETURN_CODE;
+    END;
+ RETURN;
+-END DTCNVCH;

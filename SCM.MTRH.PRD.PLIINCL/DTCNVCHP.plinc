@@ -1,0 +1,17 @@
+0/*********************************************************************/
+ /* DTCNVCHP: CONVERT A DATE FROM JULIAN TO CHARACTER FORMAT          */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  ID      WHAT                                      */
+ /* ---------- ---- ------- ----------------------------------------- */
+ /* 1998-02-25 HJB  C980241 ORIGINAL                                  */
+ /*********************************************************************/
+ DCL DTCNVCH_STR          CHAR(48);
+ DCL 1 DTCNVCH_WORK       BASED(DTCNVCH_PTR),
+       2 INPUT_DATA,
+         3 INPUT_DATE        PIC'(7)9',
+         3 OUTPUT_FORMAT     CHAR(02),
+       2 OUTPUT_DATA,
+         3 OUTPUT_DATE       CHAR(20),
+         3 RETURN_CODE       FIXED BIN(15);
+ DCL DTCNVCH_PTR             POINTER;

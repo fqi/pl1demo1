@@ -1,0 +1,126 @@
+ /* DTADGRM: CLSMVS: ADJUST A CCYY-MM-DD DATE BT DELTA MONTHS         */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-04-14 HJB  C980411  CREATE                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* THIS MODULE READS IN A GREGORIAN DATE IN THE FORMAT CCYY-MM-DD    */
+ /* AND ADJUSTS IT BY THE NUMBER OF MONTHS SPECIFIED BY THE FIELD     */
+ /* DELTA_AMT.                                                        */
+ /*                                                                   */
+ /*********************************************************************/
+1DTADGRM: PROC (DTADGRM_PTR)
+          REORDER;
+0/*----------------------------------------------------------------*/
+ /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+ /*----------------------------------------------------------------*/
+ %INCLUDE DTADGRMP;
+ %INCLUDE DTEDIT;
+ %INCLUDE DTFORMAT;
+ %INCLUDE LEAPYR;
+ DCL ABS                          BUILTIN;
+ DCL ADDR                         BUILTIN;
+ DCL MOD                          BUILTIN;
+ DCL WS_WORK_DATE                 CHAR(10);
+ DCL 1 WS_WORK_DATE_OL            BASED(ADDR(WS_WORK_DATE)),
+       3 CCYY                     PIC'9999',
+       3 D1                       CHAR(01),
+       3 MM                       PIC'99',
+       3 D2                       CHAR(01),
+       3 DD                       PIC'99';
+ DCL WS_YEAR_NUM                  FIXED BIN(31);
+ DCL WS_DAYS_IN_MTH(12)           PIC'99'  INIT(31,28,31,30,31,30,
+                                                31,31,30,31,30,31);
+ DCL NUMERIC                      CHAR(10) INIT('1234567890');
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+   DCL WS_DELTA_AMT               FIXED BIN(31);
+   DCL WS_YRS_TO_ADJUST           FIXED BIN(31);
+   DCL WS_MTHS_TO_ADJUST          FIXED BIN(31);
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+   DTADGRM_WORK.OUTPUT_DATA = '';
+   DTEDIT_WORK = '';
+   DTEDIT_WORK.INPUT_DATE   = DTADGRM_WORK.INPUT_DT;
+   DTEDIT_WORK.INPUT_FORMAT = CCYY_MM_DD;
+   IF ^(DTEDIT(DTEDIT_PTR))
+   THEN
+      DO;
+         DTADGRM_WORK.RETURN_CODE = DTEDIT_WORK.RETURN_CODE;
+         DTADGRM_WORK.OUTPUT_DT = '';
+         RETURN;
+      END;
+   WS_WORK_DATE      = DTADGRM_WORK.INPUT_DT;
+   WS_DELTA_AMT      = ABS(DTADGRM_WORK.DELTA_AMT);
+   WS_YRS_TO_ADJUST  = WS_DELTA_AMT/12;
+   WS_MTHS_TO_ADJUST = MOD(WS_DELTA_AMT,12);
+0/********************************************************************/
+ /*  IF DELTA AMOUNT IS NEGATIVE THEN SUBTRACT DELTA MONTHS ELSE ADD
+ /********************************************************************/
+   IF DTADGRM_WORK.DELTA_AMT > 0
+   THEN
+      CALL A100_ADD_MTHS;
+   ELSE
+      CALL A200_SUBTRACT_MTHS;
+0/********************************************************************/
+ /*  IF THE RESULTING MONTH IS FEB THEN DETERMINE IF THE RESULTING
+ /*  YEAR IS A LEAP YEAR AND ENSURE THE NUMBER OF DAYS IS CORRECT FOR
+ /*  FEBRUARY
+ /********************************************************************/
+   IF WS_WORK_DATE_OL.MM = 2
+   THEN
+      DO;
+         WS_YEAR_NUM = WS_WORK_DATE_OL.CCYY;
+         IF LEAPYR(WS_YEAR_NUM)
+         THEN
+            WS_DAYS_IN_MTH(2) = 29;
+      END;
+ /********************************************************************/
+ /*  ENSURE THE RESULTING RESULTING DAY IS NOT GREATER THEN THE
+ /*  NUMBER OF DAYS IN THE FDESULTING MONTH. SET TO THE LAST DAY OF
+ /*  THE MONTH IF IT IS.
+ /********************************************************************/
+   IF WS_WORK_DATE_OL.DD > WS_DAYS_IN_MTH(WS_WORK_DATE_OL.MM)
+   THEN
+      WS_WORK_DATE_OL.DD   = WS_DAYS_IN_MTH(WS_WORK_DATE_OL.MM);
+   DTADGRM_WORK.OUTPUT_DT  = WS_WORK_DATE;
+   RETURN;
+1/********************************************************************/
+ /*  ADD THE MONTHS SPECIFIED TO THE DATE INPUT.
+ /********************************************************************/
+0A100_ADD_MTHS: PROC;
+ WS_WORK_DATE_OL.CCYY = WS_WORK_DATE_OL.CCYY + WS_YRS_TO_ADJUST;
+ IF WS_WORK_DATE_OL.MM + WS_MTHS_TO_ADJUST > 12
+ THEN
+    DO;
+       WS_WORK_DATE_OL.CCYY = WS_WORK_DATE_OL.CCYY + 1;
+       WS_WORK_DATE_OL.MM   = WS_WORK_DATE_OL.MM +
+       WS_MTHS_TO_ADJUST - 12;
+    END;
+ ELSE
+    WS_WORK_DATE_OL.MM = WS_WORK_DATE_OL.MM + WS_MTHS_TO_ADJUST;
+ END A100_ADD_MTHS;
+1/********************************************************************/
+ /*  SUBTRACT THE MONTHS SPECIFIED FROM THE DATE INPUT.
+ /********************************************************************/
+0A200_SUBTRACT_MTHS: PROC;
+ WS_WORK_DATE_OL.CCYY = WS_WORK_DATE_OL.CCYY - WS_YRS_TO_ADJUST;
+ IF WS_WORK_DATE_OL.MM > WS_MTHS_TO_ADJUST
+ THEN
+    WS_WORK_DATE_OL.MM = WS_WORK_DATE_OL.MM - WS_MTHS_TO_ADJUST;
+ ELSE
+    DO;
+       WS_WORK_DATE_OL.CCYY = WS_WORK_DATE_OL.CCYY - 1;
+       WS_WORK_DATE_OL.MM   = WS_WORK_DATE_OL.MM -
+                              WS_MTHS_TO_ADJUST + 12;
+    END;
+ END A200_SUBTRACT_MTHS;
+-END DTADGRM;

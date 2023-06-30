@@ -1,0 +1,74 @@
+ /* DTSLIDE: CLSMVS: DETERMINE CENTURY BASED ON TWO DIGIT YEAR AND A  */
+ /* SLIDING WINDOW CONTROLLED BY AN INPUT PARM                        */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-02-24 HJB  C980241  CREATE                                   */
+ /* 1998-03-30 HJB  C980241  Q.A. CHANGES                             */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* DETERMINE THE CENTURY BASED ON A TWO DIGIT YEAR. THE CENTURY IS   */
+ /* DETERMINED BY DETERMINING WHERE THE TWO DIGIT YEAR FITS IN        */
+ /* A SLIDING SCALE. THE UPPPER AND LOWER LIMITS OF THE SCALE ARE     */
+ /* CALCULATED BASED ON THE CURRENT SYSTEM DATE AND A LIMIT           */
+ /* PROVIDED BY THE CALLING PROGRAM.                                  */
+ /*                                                                   */
+ /*********************************************************************/
+1DTSLIDE: PROC (DTSLIDE_PTR)
+          REORDER;
+1  /*----------------------------------------------------------------*/
+   /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+   /*----------------------------------------------------------------*/
+   %INCLUDE DTSLIDEP;
+   DCL (ADDR,
+        DATETIME,
+        VERIFY)                   BUILTIN;
+   DCL INPUT_STR                  CHAR(04) BASED(DTSLIDE_PTR);
+   DCL 1 OUTPUT_YEAR_OL           BASED(ADDR(OUTPUT_YEAR)),
+         3 CC                     PIC'99',
+         3 YY                     PIC'99';
+   DCL CURRENT_DATE               CHAR(17);
+   DCL 1 CURRENT_DATE_OL          BASED(ADDR(CURRENT_DATE)),
+         3 YEAR                   PIC'9999',
+         3 MONTH                  PIC'99',
+         3 DAY                    PIC'99',
+         3 HOUR                   PIC'99',
+         3 MINUTE                 PIC'99',
+         3 SECOND                 PIC'99',
+         3 MILLISEC               PIC'999';
+   DCL UPPER_LIMIT                PIC'9999';
+   DCL 1 UPPER_LIMIT_OL           BASED(ADDR(UPPER_LIMIT)),
+          3 UPPER_LIMIT_CC        PIC'99',
+          3 UPPER_LIMIT_YY        PIC'99';
+   DCL LOWER_LIMIT                PIC'9999';
+   DCL 1 LOWER_LIMIT_OL           BASED(ADDR(LOWER_LIMIT)),
+          3 LOWER_LIMIT_CC        PIC'99',
+          3 LOWER_LIMIT_YY        PIC'99';
+   DCL NUMERIC                    CHAR(10) INIT('1234567890');
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+0   DTSLIDE_WORK.OUTPUT_DATA  = '';
+0   OUTPUT_YEAR               = 0;
+0   IF VERIFY(INPUT_STR,NUMERIC) = 0
+    THEN
+       DO;
+          CURRENT_DATE              = DATETIME;
+          UPPER_LIMIT               = CURRENT_DATE_OL.YEAR + WINDOW_LMT;
+          LOWER_LIMIT               = UPPER_LIMIT - 99;
+          IF INPUT_YY <= UPPER_LIMIT_YY
+          THEN
+             OUTPUT_YEAR_OL.CC      = UPPER_LIMIT_CC;
+          ELSE
+             OUTPUT_YEAR_OL.CC      = LOWER_LIMIT_CC;
+          OUTPUT_YEAR_OL.YY         = INPUT_YY;
+       END;
+    ELSE
+       DTSLIDE_WORK.RETURN_CODE     = 8;
+0   RETURN;
+-END DTSLIDE;

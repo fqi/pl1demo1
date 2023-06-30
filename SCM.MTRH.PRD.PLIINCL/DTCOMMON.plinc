@@ -1,0 +1,59 @@
+0/*********************************************************************/
+ /* DTCOMMON: COMMON DECLARES FOR THE DATE ROUTINES                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  ID      WHAT                                      */
+ /* ---------- ---- ------- ----------------------------------------- */
+ /* 1998-02-25 HJB  C980241 ORIGINAL                                  */
+ /*********************************************************************/
+   DCL WS_DATE_STRING             CHAR(20);
+   DCL WS_DATE_PTR                POINTER;
+   DCL 1 WS_DDMMYY_DT             BASED(WS_DATE_PTR),
+         3 DD                     CHAR(02),
+         3 MM                     CHAR(02),
+         3 YY                     CHAR(02);
+   DCL 1 WS_DDMMMYY_DT            BASED(WS_DATE_PTR),
+         3 DD                     CHAR(02),
+         3 MMM                    CHAR(03),
+         3 YY                     CHAR(02);
+   DCL 1 WS_YYMMMDD_DT            BASED(WS_DATE_PTR),
+         3 YY                     CHAR(02),
+         3 MMM                    CHAR(03),
+         3 DD                     CHAR(02);
+   DCL 1 WS_YYMMDD_DT             BASED(WS_DATE_PTR),
+         3 YY                     CHAR(02),
+         3 MM                     CHAR(02),
+         3 DD                     CHAR(02);
+   DCL 1 WS_YY_MM_DD_DT             BASED(WS_DATE_PTR),
+         3 YY                     CHAR(02),
+         3 D1                     CHAR(01),
+         3 MM                     CHAR(02),
+         3 D2                     CHAR(01),
+         3 DD                     CHAR(02);
+   DCL 1 WS_DDMMCCYY_DT           BASED(WS_DATE_PTR),
+         3 DD                     CHAR(02),
+         3 MM                     CHAR(02),
+         3 CC                     CHAR(02),
+         3 YY                     CHAR(02);
+   DCL 1 WS_DDMMMCCYY_DT          BASED(WS_DATE_PTR),
+         3 DD                     CHAR(02),
+         3 MMM                    CHAR(03),
+         3 CC                     CHAR(02),
+         3 YY                     CHAR(02);
+   DCL 1 WS_CCYYMMDD_DT           BASED(WS_DATE_PTR),
+         3 CC                     CHAR(02),
+         3 YY                     CHAR(02),
+         3 MM                     CHAR(02),
+         3 DD                     CHAR(02);
+   DCL 1 WS_CCYYMMMDD_DT          BASED(WS_DATE_PTR),
+         3 CC                     CHAR(02),
+         3 YY                     CHAR(02),
+         3 MMM                    CHAR(03),
+         3 DD                     CHAR(02);
+   DCL 1 WS_CCYY_MM_DD_DT         BASED(WS_DATE_PTR),
+         3 CC                     CHAR(02),
+         3 YY                     CHAR(02),
+         3 D1                     CHAR(01),
+         3 MM                     CHAR(02),
+         3 D2                     CHAR(01),
+         3 DD                     CHAR(02);

@@ -1,0 +1,246 @@
+ /* DTCNVJL: CLSMVS: CONVERT A DATE INTO JULIAN FORMAT                */
+ /* OWNING SYSTEM  : MTRH <-- APPLICATION SYSTEM ID OF THIS PROGRAM   */
+ /*********************************************************************/
+ /*                                                                   */
+ /* WHEN       WHO  CR #     WHAT                                     */
+ /* ---------- ---- -------- ---------------------------------------- */
+ /* 1998-02-24 HJB  C980241  CREATE                                   */
+ /* 1998-03-30 HJB  C980241  Q.A. CHANGES                             */
+ /*********************************************************************/
+ /*                                                                   */
+ /* PROGRAM OVERVIEW:                                                 */
+ /* ----------------                                                  */
+ /*                                                                   */
+ /* CONVERT A DATE, THE FORMAT OF WHICH IS SPECIFIED IN THE INPUT     */
+ /* FORMAT PARAMETER, INTO A JULIAN FORMAT IF THE INPUT DATE          */
+ /* DOES NOT HAVE A CENTURY COMPONENT THE CENTURY IS DETERMINED BY    */
+ /* CALLING THE DTSLIDE ROUTINE.                                      */
+ /*                                                                   */
+ /*********************************************************************/
+1DTCNVJL: PROC (DTCNVJL_PTR)
+          REORDER;
+1  /*----------------------------------------------------------------*/
+   /*  DCLS .... PARAMETERS / LOCAL VARIABLES
+   /*----------------------------------------------------------------*/
+   %INCLUDE DTCNVJLP;
+   %INCLUDE DTSLIDE;
+   %INCLUDE DTEDIT;
+   %INCLUDE DTFORMAT;
+   %INCLUDE LEAPYR;
+   %INCLUDE DTCOMMON;
+   DCL ADDR                       BUILTIN;
+   DCL SUBSTR                     BUILTIN;
+   DCL VERIFY                     BUILTIN;
+   DCL JULIAN_DT                  PIC'(7)9' INIT(0);
+   DCL 1 WS_CCYYJJJ               BASED(ADDR(JULIAN_DT)),
+         3 CC                     PIC'99',
+         3 YY                     PIC'99',
+         3 JJJ                    PIC'999';
+   DCL WS_YEAR                    CHAR(04) INIT(' ');
+   DCL 1 WS_YEAR_CHAR             BASED(ADDR(WS_YEAR)),
+         3 WS_CC                  CHAR(02),
+         3 WS_YY                  CHAR(02);
+   DCL 1 WS_YEAR_PIC              BASED(ADDR(WS_YEAR)),
+         3 WS_CC_PIC              PIC'99',
+         3 WS_YY_PIC              PIC'99';
+   DCL WS_YEAR_PIC_OL             PIC'9999' BASED(ADDR(WS_YEAR));
+   DCL WS_YEAR_NUM                FIXED BIN(31) INIT(0);
+   DCL WS_WINDOW_LMT_CHAR         CHAR(02)
+                                  BASED(ADDR(DTCNVJL_WORK.WINDOW_LMT));
+   DCL WS_MM                      CHAR(02) INIT(' ');
+   DCL WS_MM_PIC                  PIC'99'  BASED(ADDR(WS_MM));
+   DCL WS_MMM                     CHAR(03) INIT(' ');
+   DCL WS_DD                      CHAR(02) INIT(' ');
+   DCL WS_DD_PIC                  PIC'99' BASED(ADDR(WS_DD));
+   DCL WS_JJJ                     CHAR(03) INIT(' ');
+   DCL WS_JJJ_PIC                 PIC'999' BASED(ADDR(WS_JJJ));
+   DCL WS_MONTHS(12)              CHAR(03) INIT('JAN','FEB','MAR',
+                                                'APR','MAY','JUN',
+                                                'JUL','AUG','SEP',
+                                                'OCT','NOV','DEC');
+   DCL WS_START_DAY(12)           PIC'999' INIT(000,031,059,090,
+                                                120,151,181,212,
+                                                243,273,304,334);
+   DCL I                          FIXED BIN(15) INIT(0);
+   DCL WS_FOUND                   BIT(1) INIT('0'B);
+   DCL NUMERIC                    CHAR(10) INIT('1234567890');
+1/********************************************************************/
+ /*  MAINLINE
+ /********************************************************************/
+0DTCNVJL_WORK.OUTPUT_DATA        = '';
+ DTEDIT_WORK = '';
+ DTEDIT_WORK.INPUT_DATE = SUBSTR(DTCNVJL_WORK.INPUT_DATE,1,10);
+ DTEDIT_WORK.INPUT_FORMAT = DTCNVJL_WORK.INPUT_FORMAT;
+ DTEDIT_WORK.WINDOW_LMT   = DTCNVJL_WORK.WINDOW_LMT;
+ IF ^(DTEDIT(DTEDIT_PTR))
+ THEN
+    DO;
+       DTCNVJL_WORK.RETURN_CODE = DTEDIT_WORK.RETURN_CODE;
+       DTCNVJL_WORK.OUTPUT_DATE = 0;
+       RETURN;
+    END;
+0WS_DATE_PTR                     = ADDR(WS_DATE_STRING);
+ WS_DATE_STRING                  = DTCNVJL_WORK.INPUT_DATE;
+ IF VERIFY(WS_WINDOW_LMT_CHAR,NUMERIC) ^= 0
+ THEN
+    DO;
+       DTCNVJL_WORK.RETURN_CODE = 8;
+       DTCNVJL_WORK.OUTPUT_DATE = 0;
+       RETURN;
+    END;
+ CALL A100_PROCESS_INPUT;
+ IF DTCNVJL_WORK.RETURN_CODE = 0
+ THEN
+    CALL A200_FORMAT_OUTPUT;
+ RETURN;
+1/********************************************************************/
+ /*  PARSE THE INPUT DATE INTO DAY, MONTH, YEAR AND CENTURY FIELDS
+ /********************************************************************/
+0A100_PROCESS_INPUT: PROC;
+0SELECT(DTCNVJL_WORK.INPUT_FORMAT);
+0   WHEN(DDMMYY)
+       DO;
+         WS_DD                   = WS_DDMMYY_DT.DD;
+         WS_MM                   = WS_DDMMYY_DT.MM;
+         WS_YY                   = WS_DDMMYY_DT.YY;
+         CALL A110_DETERMINE_CENTURY;
+       END;
+0   WHEN(DDMMMYY)
+       DO;
+         WS_DD                   = WS_DDMMMYY_DT.DD;
+         WS_MMM                  = WS_DDMMMYY_DT.MMM;
+         WS_YY                   = WS_DDMMMYY_DT.YY;
+         CALL A110_DETERMINE_CENTURY;
+         CALL A120_DETERMINE_MM;
+       END;
+0   WHEN(YYMMDD)
+       DO;
+         WS_DD                   = WS_YYMMDD_DT.DD;
+         WS_MM                   = WS_YYMMDD_DT.MM;
+         WS_YY                   = WS_YYMMDD_DT.YY;
+         CALL A110_DETERMINE_CENTURY;
+       END;
+0   WHEN(YYMMMDD)
+       DO;
+         WS_DD                   = WS_YYMMMDD_DT.DD;
+         WS_MMM                  = WS_YYMMMDD_DT.MMM;
+         WS_YY                   = WS_YYMMMDD_DT.YY;
+         CALL A110_DETERMINE_CENTURY;
+         CALL A120_DETERMINE_MM;
+       END;
+0   WHEN(YY_MM_DD)
+       DO;
+         WS_DD                   = WS_YY_MM_DD_DT.DD;
+         WS_MM                   = WS_YY_MM_DD_DT.MM;
+         WS_YY                   = WS_YY_MM_DD_DT.YY;
+         CALL A110_DETERMINE_CENTURY;
+       END;
+0   WHEN(DDMMCCYY)
+       DO;
+         WS_DD                   = WS_DDMMCCYY_DT.DD;
+         WS_MM                   = WS_DDMMCCYY_DT.MM;
+         WS_YY                   = WS_DDMMCCYY_DT.YY;
+         WS_CC                   = WS_DDMMCCYY_DT.CC;
+       END;
+0   WHEN(DDMMMCCYY)
+       DO;
+         WS_DD                   = WS_DDMMMCCYY_DT.DD;
+         WS_MMM                  = WS_DDMMMCCYY_DT.MMM;
+         WS_YY                   = WS_DDMMMCCYY_DT.YY;
+         WS_CC                   = WS_DDMMMCCYY_DT.CC;
+         CALL A120_DETERMINE_MM;
+       END;
+0   WHEN(CCYYMMDD)
+       DO;
+         WS_DD                   = WS_CCYYMMDD_DT.DD;
+         WS_MM                   = WS_CCYYMMDD_DT.MM;
+         WS_YY                   = WS_CCYYMMDD_DT.YY;
+         WS_CC                   = WS_CCYYMMDD_DT.CC;
+       END;
+0   WHEN(CCYYMMMDD)
+       DO;
+         WS_DD                   = WS_CCYYMMMDD_DT.DD;
+         WS_MMM                  = WS_CCYYMMMDD_DT.MMM;
+         WS_YY                   = WS_CCYYMMMDD_DT.YY;
+         WS_CC                   = WS_CCYYMMMDD_DT.CC;
+         CALL A120_DETERMINE_MM;
+       END;
+0   WHEN(CCYY_MM_DD)
+       DO;
+         WS_DD                   = WS_CCYY_MM_DD_DT.DD;
+         WS_MM                   = WS_CCYY_MM_DD_DT.MM;
+         WS_YY                   = WS_CCYY_MM_DD_DT.YY;
+         WS_CC                   = WS_CCYY_MM_DD_DT.CC;
+       END;
+0   OTHERWISE
+       DTCNVJL_WORK.RETURN_CODE  = 8;
+0END;
+ END A100_PROCESS_INPUT;
+1/********************************************************************/
+ /*  DETERMINE A VALUE FOR THE CENTURY TO BE USED IN THE DATE
+ /*  CONVERSION
+ /********************************************************************/
+0A110_DETERMINE_CENTURY: PROC;
+0/* ENSURE THAT THE VALUE IS VALID NUMERIC REPRESENTION OF A YEAR    */
+ /* BEFORE CALLING DTSLIDE TO RETURN A VALID YEAR                    */
+0IF VERIFY(WS_YY,NUMERIC) = 0
+ THEN
+    DO;
+       DTSLIDE_WORK.WINDOW_LMT         = DTCNVJL_WORK.WINDOW_LMT;
+       DTSLIDE_WORK.INPUT_YY           = WS_YY_PIC;
+       CALL DTSLIDE(DTSLIDE_PTR);
+       WS_YEAR                         = DTSLIDE_WORK.OUTPUT_YEAR;
+       DTCNVJL_WORK.RETURN_CODE        = DTSLIDE_WORK.RETURN_CODE;
+    END;
+0ELSE
+    DTCNVJL_WORK.RETURN_CODE  = 8;
+ END A110_DETERMINE_CENTURY;
+0/********************************************************************/
+ /*  CONVERT THE 3 CHARACTER ABBREVIATION FOR A MONTH TO ITS 2 DIGIT
+ /*  NUMERIC REPRESENTATION
+ /********************************************************************/
+0A120_DETERMINE_MM: PROC;
+ WS_FOUND = '0'B;
+0/* LOOP THROUGH THE ARRAY OF ABBREVIATIONS UNTIL A MATCH IS FOUND   */
+0DO I = 1 TO 12 WHILE(^WS_FOUND);
+    IF WS_MONTHS(I) = WS_MMM
+    THEN
+       DO;
+         WS_MM_PIC = I;
+         WS_FOUND  = '1'B;
+       END;
+ END;
+0/* IF NO MATCH HAS BEEN FOUND THEN INDICATE AN ERROR                */
+0IF ^WS_FOUND
+ THEN
+    DTCNVJL_WORK.RETURN_CODE  = 8;
+ END A120_DETERMINE_MM;
+1/********************************************************************/
+ /*  CONVERT THE MONTH AND DAY FIELDS TO A DAY OF THE YEAR VALUE
+ /********************************************************************/
+0A200_FORMAT_OUTPUT: PROC;
+0WS_YEAR_NUM                      = WS_YEAR_PIC_OL;
+ IF VERIFY(WS_MM,NUMERIC) = 0
+ THEN
+    IF WS_MM_PIC >= 01 & WS_MM_PIC <= 12
+    THEN
+       DO;
+          WS_JJJ_PIC             = WS_START_DAY(WS_MM_PIC) + WS_DD_PIC;
+0/* IF THE YEAR IS A LEAP YEAR THEN ADD 1 TO THE TOTAL IF THE MONTH  */
+ /* IS PAST FEBRUARY                                                 */
+0         IF LEAPYR(WS_YEAR_NUM)
+          THEN
+             IF WS_MM_PIC > 2
+             THEN
+                WS_JJJ_PIC                 = WS_JJJ_PIC + 1;
+          WS_CCYYJJJ.CC                    = WS_CC_PIC;
+          WS_CCYYJJJ.YY                    = WS_YY_PIC;
+          WS_CCYYJJJ.JJJ                   = WS_JJJ_PIC;
+          DTCNVJL_WORK.OUTPUT_DATE         = JULIAN_DT;
+       END;
+    ELSE
+       DTCNVJL_WORK.RETURN_CODE  = 8;
+ ELSE
+    DTCNVJL_WORK.RETURN_CODE  = 8;
+ END A200_FORMAT_OUTPUT;
+-END DTCNVJL;
