@@ -1,0 +1,558 @@
+*********************************************************************** 00010001
+*  DRIVER DATA BASE - DSSMDDR0  -  PHYSICAL                           * 00020007
+*              WHO  IS                                                * 00070101
+*              ---  ------------------------------------------------  * 00070201
+*              AA   ARNOLD ADLKIRCHNER                                * 00070301
+*              BB   BILL BUSSANICH                                    * 00070401
+*              BC   BRUCE CLARK                                       * 00070501
+*              BG   BRIAN GILLESPIE                                   * 00070601
+*              GB   GLEN BROWN                                        * 00070701
+*              JC   JACKSON CHAN                                      * 00070801
+*              KW   KEITH WATERS                                      * 00070901
+*********************************************************************** 00071001
+*  DATE        WHO  DESCRIPTION                                       * 00072001
+*  ----------  ---  ------------------------------------------------  * 00073001
+*  1989-03-01  BC   NEW RANDOMIZER BCSCRAN7 WAS BCSCRAN6              * 00074001
+*  1989-03-01  BC   CHANGE RAPS FROM 16 TO 15                         * 00075001
+*  1989-03-04  BC   CHANGED TO VSAM                                   * 00076001
+*  1989-03-01  BC   CHANGE RAPS FROM 15 TO 14                         * 00077001
+*  1989-08-03  BC   CHANGED DSSMXCV0 INDEX                            * 00078001
+*  1989-05-12  AA   NEW RANDOMIZER BCSCRAN8 WAS BCSCRAN7              * 00079001
+*  1989-05-12  BC   RAPS FROM 14 TO 13                                * 00080001
+*  1989-05-12  BC   BLOCKS FROM 314150 TO 346010                      * 00090001
+*  1990-09-11  BC   NEW RANDOMIZER BCSCRAN9 WAS BCSCRAN8              * 00100001
+*  1990-09-12  GB   REL12 ADD ASLC TO DR0NAME                         * 00110001
+*                   SPECIFY STLI IN DR0MST                            * 00120001
+*                   CITY AND ASLC COMBINE AS NDAT                     * 00130001
+*  1990-11-03  BC   BLOCKS FROM 346010 TO 281150                      * 00140001
+*                   RAPS FROM 13 TO 16                                * 00150001
+*                   REMOVED DR0CONV AND INDEX                         * 00160001
+*  1991-07-14  BC   BLOCKS FROM 281150 TO 282360                      * 00170001
+*                   RAPS FROM 16 TO 17                                * 00180001
+*                   BLKSIZE FROM 7168 TO 7548                         * 00190001
+*                   VSAM TO OSAM                                      * 00200001
+*  1992-01-28  KW   INCREASE CORR SIZE FROM 39 TO 127                 * 00210001
+*  1992-06-28  BC   NEW RANDOMIZER BCSCRAN9 WAS BCSCRAN8              * 00220001
+*                   REMOVED COMPRESSION ON DR0MEDN                    * 00230001
+*  1993-02-09  BG   NEW RANDOMIZER BCSCRANA WAS BCSCRAN9              * 00240001
+*                   BLOCKS FROM 282360 TO 305433                      * 00250001
+*  1994-07-26  AA   CHANGE DR0EXAM FIELD ERSN START=16 TO START=15    * 00260001
+*  1994-08-14  BB   NEW RANDOMIZER BCSCRANB WAS BCSCRANA              * 00270001
+*                   BLOCKS FROM 305433 TO 349577        3330 CYL      * 00280001
+*                   RAPS FROM 17 TO 16                                * 00290001
+*  1995-04-24  JC   ADJUDICATION REWRITE (98 SEARCH):                 * 00300001
+*                   - DR0SRCH SEGMENT                                 * 00310001
+*                     - CHANGE PTLV START FROM 4 TO 3                 * 00320001
+*                     - CHANGE SRID START FROM 3 TO 5                 * 00330001
+*                     - CHANGE SRCHID BYTES FROM 2 TO 4               * 00340001
+*                         (SRTP,PTLV)                                 * 00350001
+*                   - MOVE FILED PTLV NEXT TO FIELD SRTP              * 00360001
+*                     IN SECONDARY INDEX DSSMXSR0                     * 00370001
+*  1996-02-18  BB   NEW RANDOMIZER BCSCRANC                           * 00380001
+*                   16,349577 -> 15,390600                            * 00390001
+*  1997-05-25  BB   NEW RANDOMIZER BCSCRAND                           * 00400001
+*                   15,390600 -> 15,424355                            * 00410001
+*                   BYTE LIMIT REDUCED TO 2700                        * 00420001
+*  1998-01-08  AA   GRADUATED LICENCING PROGRAM MODIFICATIONS         * 00430001
+*                   REMOVE UNIQUE FROM FIELD INSTID OF DR0INST        * 00440001
+*                   ADD FIELD LCLS TO DR0INST                         * 00450001
+*  1999-10-19  AA   NEW RANDOMIZER BCSCRANE                           * 00460001
+*                   15,424355 -> 15,457584                            * 00470001
+*  2001-01-31  AA   NEW RANDOMIZER BCSCRANF                           * 00480001
+*                   15,457584 -> 15,484582                            * 00490001
+*  2002-12-04  AA   NEW RANDOMIZER BCSCRANG                           * 00500001
+*                   15,457584 -> 15,542134                            * 00510001
+*  2009-09-08  AA   CONVERT FROM HDAM TO HIDAM                        * 00511008
+*                                                                     * 00520001
+*********************************************************************** 00530001
+       DBD     NAME=DSSMDDR0,                                          X00540007
+               ACCESS=(HIDAM,OSAM)                                      00561001
+DSG1   DATASET DD1=DSSMDDRA,                                           X00562001
+               SIZE=10240,                                             X00563009
+               FRSPC=(0,15),    THIS ALLOWS FOR FRPSC IN OVERFLOW      X00564001
+               SCAN=99,         THE LOAD MUST SPECIFY TO IGNORE THIS   X00565001
+               DEVICE=3390      IN THE RAA                              00566005
+*                                                                       00567001
+* DRIVER MASTER                                                         00568001
+*                                                                       00569001
+       SEGM    NAME=DR0MST,                                            X00570001
+               PARENT=0,                                               X00580001
+               BYTES=355,                                              X00590001
+               COMPRTN=(BCSCCOM0),                                     X00600001
+               PTR=TB                                                   00620001
+       LCHILD  NAME=(DR0INDEX,DSSMXDR0),PTR=INDX                        00621007
+*                                                                       00622005
+       FIELD   NAME=(MSTID,SEQ,U),                                     X00630001
+               BYTES=4,                                                X00640001
+               START=1,                                                X00650001
+               TYPE=C                                                   00660001
+       FIELD   NAME=MADT,                                              X00670001
+               BYTES=4,                                                X00680001
+               START=6,                                                X00690001
+               TYPE=P                                                   00700001
+       FIELD   NAME=MCDT,                                              X00710001
+               BYTES=4,                                                X00720001
+               START=10,                                               X00730001
+               TYPE=P                                                   00740001
+       FIELD   NAME=DRDT,                                              X00750001
+               BYTES=4,                                                X00760001
+               START=16,                                               X00770001
+               TYPE=P                                                   00780001
+       FIELD   NAME=RRDT,                                              X00790001
+               BYTES=4,                                                X00800001
+               START=25,                                               X00810001
+               TYPE=P                                                   00820001
+       FIELD   NAME=BIDT,                                              X00830001
+               BYTES=4,                                                X00840001
+               START=29,                                               X00850001
+               TYPE=P                                                   00860001
+       FIELD   NAME=STLI,                                              X00870001
+               BYTES=1,                                                X00880001
+               START=34,                                               X00890001
+               TYPE=C                                                   00900001
+       FIELD   NAME=LMDT,                                              X00910001
+               BYTES=4,                                                X00920001
+               START=35,                                               X00930001
+               TYPE=P                                                   00940001
+       FIELD   NAME=LEDT,                                              X00950001
+               BYTES=4,                                                X00960001
+               START=39,                                               X00970001
+               TYPE=P                                                   00980001
+       FIELD   NAME=LCLS,                                              X00990001
+               BYTES=3,                                                X01000001
+               START=43,                                               X01010001
+               TYPE=C                                                   01020001
+       FIELD   NAME=LCL1,                                              X01030001
+               BYTES=1,                                                X01040001
+               START=43,                                               X01050001
+               TYPE=C                                                   01060001
+       FIELD   NAME=LCL2,                                              X01070001
+               BYTES=1,                                                X01080001
+               START=44,                                               X01090001
+               TYPE=C                                                   01100001
+       FIELD   NAME=LCL3,                                              X01110001
+               BYTES=1,                                                X01120001
+               START=45,                                               X01130001
+               TYPE=C                                                   01140001
+       FIELD   NAME=FRND,                                              X01150001
+               BYTES=1,                                                X01160001
+               START=49,                                               X01170001
+               TYPE=C                                                   01180001
+       FIELD   NAME=FRDT,                                              X01190001
+               BYTES=4,                                                X01200001
+               START=50,                                               X01210001
+               TYPE=P                                                   01220001
+       FIELD   NAME=RST1,                                              X01230001
+               BYTES=2,                                                X01240001
+               START=61,                                               X01250001
+               TYPE=C                                                   01260001
+       FIELD   NAME=RST2,                                              X01270001
+               BYTES=2,                                                X01280001
+               START=63,                                               X01290001
+               TYPE=C                                                   01300001
+       FIELD   NAME=RST3,                                              X01310001
+               BYTES=2,                                                X01320001
+               START=65,                                               X01330001
+               TYPE=C                                                   01340001
+       FIELD   NAME=RST4,                                              X01350001
+               BYTES=2,                                                X01360001
+               START=67,                                               X01370001
+               TYPE=C                                                   01380001
+       FIELD   NAME=RST5,                                              X01390001
+               BYTES=2,                                                X01400001
+               START=69,                                               X01410001
+               TYPE=C                                                   01420001
+       FIELD   NAME=RST6,                                              X01430001
+               BYTES=2,                                                X01440001
+               START=71,                                               X01450001
+               TYPE=C                                                   01460001
+       FIELD   NAME=JURI,                                              X01470001
+               BYTES=2,                                                X01480001
+               START=245,                                              X01490001
+               TYPE=C                                                   01500001
+       FIELD   NAME=JNUM,                                              X01510001
+               BYTES=25,                                               X01520001
+               START=247,                                              X01530001
+               TYPE=C                                                   01540001
+*                                                                       01550001
+* SECONDARY INDICES                                                     01560001
+*                                                                       01570001
+       LCHILD  NAME=(FR0MST,DSSMXFR0),                                 X01580001
+               PTR=SYMB                                                 01590001
+       XDFLD   NAME=FR0KEY,                                            X01600001
+               SRCH=FRND,                                              X01610001
+               SUBSEQ=(FRDT,MSTID),                                    X01620001
+               NULLVAL=C'0'                                             01630001
+       LCHILD  NAME=(OP0MST,DSSMXOP0),                                 X01640001
+               PTR=SYMB                                                 01650001
+       XDFLD   NAME=OP0KEY,                                            X01660001
+               SRCH=(JURI,JNUM),                                       X01670001
+               SUBSEQ=MSTID,                                           X01680001
+               NULLVAL=C' '                                             01690001
+       LCHILD  NAME=(NM0MST,DSSMXNM0),                                 X01700001
+               PTR=SYMB                                                 01710001
+       XDFLD   NAME=NM0KEY,                                            X01720001
+               SEGMENT=DR0NAME,                                        X01730001
+               SRCH=DLET,                                              X01740001
+               SUBSEQ=(SRC1,GIN1,SRC3,/CKLNUM,NSEQ),                   X01750001
+               DDATA=(NACD,FRND,GIN2,INIT,NDAT)                         01760001
+       LCHILD  NAME=(ST0MST,DSSMXST0),                                 X01770001
+               PTR=SYMB                                                 01780001
+       XDFLD   NAME=ST0KEY,                                            X01790001
+               SEGMENT=DR0STAT,                                        X01800001
+               SRCH=SECT,                                              X01810001
+               SUBSEQ=(NMCD,NECD,SRDT,EFDT,/CKLNUM)                     01820001
+       LCHILD  NAME=(SR0MST,DSSMXSR0),                                 X01830001
+               PTR=SYMB                                                 01840001
+       XDFLD   NAME=SR0KEY,                                            X01850001
+               SEGMENT=DR0SRCH,                                        X01860001
+               SRCH=(SRTP,PTLV,SRID,SRDT),                             X01870001
+               SUBSEQ=(FRNO,/CKLNUM)                                    01880001
+*                                                                       01890001
+* NAME                                                                  01900001
+*                                                                       01910001
+       SEGM    NAME=DR0NAME,                                           X01920001
+               PARENT=DR0MST,                                          X01930001
+               BYTES=109,                                              X01940001
+               COMPRTN=(BCSCCOM1),                                     X01950001
+               PTR=HIER                                                 01960001
+       FIELD   NAME=(NAMEID,SEQ,U),                                    X01970001
+               BYTES=2,                                                X01980001
+               START=1,                                                X01990001
+               TYPE=P                                                   02000001
+       FIELD   NAME=/CKLNUM,                                           X02010001
+               BYTES=4,                                                X02020001
+               START=1,                                                X02030001
+               TYPE=C                                                   02040001
+       FIELD   NAME=NSEQ,                                              X02050001
+               BYTES=2,                                                X02060001
+               START=1,                                                X02070001
+               TYPE=C                                                   02080001
+       FIELD   NAME=DLET,                                              X02090001
+               BYTES=1,                                                X02100001
+               START=3,                                                X02110001
+               TYPE=C                                                   02120001
+       FIELD   NAME=SRC1,                                              X02130001
+               BYTES=27,                                               X02140001
+               START=15,                                               X02150001
+               TYPE=C                                                   02160001
+       FIELD   NAME=GIN1,                                              X02170001
+               BYTES=3,                                                X02180001
+               START=55,                                               X02190001
+               TYPE=C                                                   02200001
+       FIELD   NAME=GIN2,                                              X02210001
+               BYTES=12,                                               X02220001
+               START=58,                                               X02230001
+               TYPE=C                                                   02240001
+       FIELD   NAME=SRC3,                                              X02250001
+               BYTES=5,                                                X02260001
+               START=90,                                               X02270001
+               TYPE=C                                                   02280001
+       FIELD   NAME=NACD,                                              X02290001
+               BYTES=1,                                                X02300001
+               START=95,                                               X02310001
+               TYPE=C                                                   02320001
+       FIELD   NAME=FRND,                                              X02330001
+               BYTES=1,                                                X02340001
+               START=96,                                               X02350001
+               TYPE=C                                                   02360001
+       FIELD   NAME=INIT,                                              X02370001
+               BYTES=2,                                                X02380001
+               START=97,                                               X02390001
+               TYPE=C                                                   02400001
+       FIELD   NAME=NDAT,                                              X02410001
+               BYTES=11,                                               X02420001
+               START=99,                                               X02430001
+               TYPE=C                                                   02440001
+*                                                                       02450001
+* CITY AND ASLC COMBINE TO MAKE NDAT                                    02460001
+*                                                                       02470001
+*                                                                       02480001
+* STATUS                                                                02490001
+*                                                                       02500001
+       SEGM    NAME=DR0STAT,                                           X02510001
+               PARENT=DR0MST,                                          X02520001
+               BYTES=14,                                               X02530001
+               PTR=HIER                                                 02540001
+       FIELD   NAME=(STATID,SEQ,U),                                    X02550001
+               BYTES=14,                                               X02560001
+               START=1,                                                X02570001
+               TYPE=C                                                   02580001
+       FIELD   NAME=/CKLNUM,                                           X02590001
+               BYTES=4,                                                X02600001
+               START=1,                                                X02610001
+               TYPE=C                                                   02620001
+       FIELD   NAME=XPND,                                              X02630001
+               BYTES=6,                                                X02640001
+               START=1,                                                X02650001
+               TYPE=C                                                   02660001
+       FIELD   NAME=SECT,                                              X02670001
+               BYTES=1,                                                X02680001
+               START=1,                                                X02690001
+               TYPE=C                                                   02700001
+       FIELD   NAME=NMCD,                                              X02710001
+               BYTES=1,                                                X02720001
+               START=2,                                                X02730001
+               TYPE=C                                                   02740001
+       FIELD   NAME=NECD,                                              X02750001
+               BYTES=4,                                                X02760001
+               START=3,                                                X02770001
+               TYPE=C                                                   02780001
+       FIELD   NAME=EFDT,                                              X02790001
+               BYTES=4,                                                X02800001
+               START=7,                                                X02810001
+               TYPE=P                                                   02820001
+       FIELD   NAME=SRDT,                                              X02830001
+               BYTES=4,                                                X02840001
+               START=11,                                               X02850001
+               TYPE=P                                                   02860001
+*                                                                       02870001
+* MICROFILM                                                             02880001
+*                                                                       02890001
+       SEGM    NAME=DR0FILM,                                           X02900001
+               PARENT=DR0MST,                                          X02910001
+               BYTES=15,                                               X02920001
+               PTR=HIER                                                 02930001
+       FIELD   NAME=(FILMID,SEQ,U),                                    X02940001
+               BYTES=15,START=1,TYPE=C                                  02950001
+       FIELD   NAME=MFTP,                                              X02960001
+               BYTES=4,                                                X02970001
+               START=1,                                                X02980001
+               TYPE=C                                                   02990001
+       FIELD   NAME=MFDT,                                              X03000001
+               BYTES=4,                                                X03010001
+               START=5,                                                X03020001
+               TYPE=P                                                   03030001
+       FIELD   NAME=MFNO,                                              X03040001
+               BYTES=7,                                                X03050001
+               START=9,                                                X03060001
+               TYPE=C                                                   03070001
+*                                                                       03080001
+* ADDRESS                                                               03090001
+*                                                                       03100001
+       SEGM    NAME=DR0ADDR,                                           X03110001
+               PARENT=DR0MST,                                          X03120001
+               BYTES=106,                                              X03130001
+               COMPRTN=(BCSCCOM1),                                     X03140001
+               PTR=HIER                                                 03150001
+       FIELD   NAME=(ADDRID,SEQ,U),                                    X03160001
+               BYTES=5,                                                X03170001
+               START=1,                                                X03180001
+               TYPE=C                                                   03190001
+*                                                                       03200001
+* SUSPENSION                                                            03210001
+*                                                                       03220001
+       SEGM    NAME=DR0SUSP,                                           X03230001
+               PARENT=DR0MST,                                          X03240001
+               BYTES=22,                                               X03250001
+               PTR=HIER                                                 03260001
+       FIELD   NAME=(SUSPID,SEQ,U),                                    X03270001
+               BYTES=10,                                               X03280001
+               START=1,                                                X03290001
+               TYPE=C                                                   03300001
+       FIELD   NAME=SSDT,                                              X03310001
+               BYTES=4,                                                X03320001
+               START=1,                                                X03330001
+               TYPE=P                                                   03340001
+       FIELD   NAME=SCAS,                                              X03350001
+               BYTES=6,                                                X03360001
+               START=5,                                                X03370001
+               TYPE=P                                                   03380001
+       FIELD   NAME=SRDT,                                              X03390001
+               BYTES=4,                                                X03400001
+               START=11,                                               X03410001
+               TYPE=P                                                   03420001
+       FIELD   NAME=ADDT,                                              X03430001
+               BYTES=4,                                                X03440001
+               START=15,                                               X03450001
+               TYPE=P                                                   03460001
+       FIELD   NAME=DLDT,                                              X03470001
+               BYTES=4,                                                X03480001
+               START=19,                                               X03490001
+               TYPE=P                                                   03500001
+*                                                                       03510001
+* ACCIDENTS                                                             03520001
+*                                                                       03530001
+       SEGM    NAME=DR0ACCD,                                           X03540001
+               PARENT=DR0MST,                                          X03550001
+               BYTES=23,                                               X03560001
+               PTR=HIER                                                 03570001
+       FIELD   NAME=(ACCDID,SEQ,U),                                    X03580001
+               BYTES=11,                                               X03590001
+               START=1,                                                X03600001
+               TYPE=C                                                   03610001
+       FIELD   NAME=ACDT,                                              X03620001
+               BYTES=4,                                                X03630001
+               START=1,                                                X03640001
+               TYPE=P                                                   03650001
+*                                                                       03660001
+* CORRESPONDENCE                                                        03670001
+*                                                                       03680001
+       SEGM    NAME=DR0CORR,                                           X03690001
+               PARENT=DR0MST,                                          X03700001
+               BYTES=127,                                              X03710001
+               COMPRTN=(BCSCCOM1),                                     X03720001
+               PTR=HIER                                                 03730001
+       FIELD   NAME=(CORRID,SEQ,U),                                    X03740001
+               BYTES=31,                                               X03750001
+               START=1,                                                X03760001
+               TYPE=C                                                   03770001
+       FIELD   NAME=CODT,                                              X03780001
+               BYTES=4,                                                X03790001
+               START=1,                                                X03800001
+               TYPE=P                                                   03810001
+       FIELD   NAME=CTYP,                                              X03820001
+               BYTES=2,                                                X03830001
+               START=5,                                                X03840001
+               TYPE=C                                                   03850001
+       FIELD   NAME=ADDT,                                              X03860001
+               BYTES=4,                                                X03870001
+               START=32,                                               X03880001
+               TYPE=P                                                   03890001
+       FIELD   NAME=DLDT,                                              X03900001
+               BYTES=4,                                                X03910001
+               START=36,                                               X03920001
+               TYPE=P                                                   03930001
+*                                                                       03940001
+* MEDICAL                                                               03950001
+*                                                                       03960001
+       SEGM    NAME=DR0MEDN,                                           X03970001
+               PARENT=DR0MST,                                          X03980001
+               BYTES=29,                                               X03990001
+               PTR=HIER                                                 04000001
+       FIELD   NAME=(MEDNID,SEQ,U),                                    X04010001
+               BYTES=11,                                               X04020001
+               START=1,                                                X04030001
+               TYPE=C                                                   04040001
+       FIELD   NAME=MDSP,                                              X04050001
+               BYTES=1,                                                X04060001
+               START=25,                                               X04070001
+               TYPE=C                                                   04080001
+*                                                                       04090001
+* MEDICAL DOCUMENTS                                                     04100001
+*                                                                       04110001
+       SEGM    NAME=DR0MDOC,                                           X04120001
+               PARENT=DR0MEDN,                                         X04130001
+               BYTES=11,                                               X04140001
+               PTR=HIER                                                 04150001
+       FIELD   NAME=(MDOCID,SEQ,U),                                    X04160001
+               BYTES=7,                                                X04170001
+               START=1,                                                X04180001
+               TYPE=C                                                   04190001
+*                                                                       04200001
+* EXAMINATION                                                           04210001
+*                                                                       04220001
+       SEGM    NAME=DR0EXAM,                                           X04230001
+               PARENT=DR0MST,                                          X04240001
+               BYTES=82,                                               X04250001
+               COMPRTN=(BCSCCOM1),                                     X04260001
+               PTR=HIER                                                 04270001
+       FIELD   NAME=(EXAMID,SEQ,U),                                    X04280001
+               BYTES=11,                                               X04290001
+               START=1,                                                X04300001
+               TYPE=C                                                   04310001
+       FIELD   NAME=EXDT,                                              X04320001
+               BYTES=4,                                                X04330001
+               START=1,                                                X04340001
+               TYPE=P                                                   04350001
+       FIELD   NAME=ERSN,                                              X04360001
+               BYTES=1,                                                X04370001
+               START=15,                                               X04380001
+               TYPE=C                                                   04390001
+*                                                                       04400001
+* PHOTO LICENCE                                                         04410001
+*                                                                       04420001
+       SEGM    NAME=DR0FOTO,                                           X04430001
+               PARENT=DR0MST,                                          X04440001
+               BYTES=31,                                               X04450001
+               COMPRTN=(BCSCCOM1),                                     X04460001
+               PTR=HIER                                                 04470001
+       FIELD   NAME=(FOTOID,SEQ,U),                                    X04480001
+               BYTES=11,                                               X04490001
+               START=1,                                                X04500001
+               TYPE=C                                                   04510001
+       FIELD   NAME=LIDT,                                              X04520001
+               BYTES=4,                                                X04530001
+               START=1,                                                X04540001
+               TYPE=P                                                   04550001
+       FIELD   NAME=LINO,                                              X04560001
+               BYTES=7,                                                X04570001
+               START=5,                                                X04580001
+               TYPE=C                                                   04590001
+       FIELD   NAME=LICD,                                              X04600001
+               BYTES=1,                                                X04610001
+               START=12,                                               X04620001
+               TYPE=C                                                   04630001
+*                                                                       04640001
+* INSTRUCTIONAL LICENCE                                                 04650001
+*                                                                       04660001
+       SEGM    NAME=DR0INST,                                           X04670001
+               PARENT=DR0MST,                                          X04680001
+               BYTES=120,                                              X04690001
+               COMPRTN=(BCSCCOM1),                                     X04700001
+               PTR=HIER                                                 04710001
+       FIELD   NAME=(INSTID,SEQ,M),                                    X04720001
+               BYTES=4,                                                X04730001
+               START=1,                                                X04740001
+               TYPE=C                                                   04750001
+       FIELD   NAME=LCLS,                                              X04760001
+               BYTES=3,                                                X04770001
+               START=20,                                               X04780001
+               TYPE=C                                                   04790001
+*                                                                       04800001
+* DOCUMENTS                                                             04810001
+*                                                                       04820001
+       SEGM    NAME=DR0DOCM,                                           X04830001
+               PARENT=DR0MST,                                          X04840001
+               BYTES=12,                                               X04850001
+               PTR=HIER                                                 04860001
+       FIELD   NAME=(DOCMID,SEQ,U),                                    X04870001
+               BYTES=12,                                               X04880001
+               START=1,                                                X04890001
+               TYPE=C                                                   04900001
+       FIELD   NAME=DNID,                                              X04910001
+               BYTES=1,                                                X04920001
+               START=1,                                                X04930001
+               TYPE=C                                                   04940001
+       FIELD   NAME=DADT,                                              X04950001
+               BYTES=4,                                                X04960001
+               START=9,                                                X04970001
+               TYPE=P                                                   04980001
+*                                                                       04990001
+* SEARCHES                                                              05000001
+*                                                                       05010001
+       SEGM    NAME=DR0SRCH,                                           X05020001
+               PARENT=DR0MST,                                          X05030001
+               BYTES=16,                                               X05040001
+               PTR=HIER                                                 05050001
+       FIELD   NAME=(SRCHID,SEQ,U),                                    X05060001
+               BYTES=4,                                                X05070001
+               START=1,                                                X05080001
+               TYPE=C                                                   05090001
+       FIELD   NAME=/CKLNUM,                                           X05100001
+               BYTES=4,                                                X05110001
+               START=1,                                                X05120001
+               TYPE=P                                                   05130001
+       FIELD   NAME=SRTP,                                              X05140001
+               BYTES=2,                                                X05150001
+               START=1,                                                X05160001
+               TYPE=C                                                   05170001
+       FIELD   NAME=PTLV,                                              X05180001
+               BYTES=2,                                                X05190001
+               START=3,                                                X05200001
+               TYPE=C                                                   05210001
+       FIELD   NAME=SRID,                                              X05220001
+               BYTES=1,                                                X05230001
+               START=5,                                                X05240001
+               TYPE=C                                                   05250001
+       FIELD   NAME=SRDT,                                              X05260001
+               BYTES=4,                                                X05270001
+               START=6,                                                X05280001
+               TYPE=P                                                   05290001
+       FIELD   NAME=FRNO,                                              X05300001
+               BYTES=7,                                                X05310001
+               START=10,                                               X05320001
+               TYPE=C                                                   05330001
+       DBDGEN                                                           05340001
+       FINISH                                                           05350001
+       END                                                              05360001

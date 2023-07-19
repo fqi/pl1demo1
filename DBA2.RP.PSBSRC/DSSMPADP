@@ -1,0 +1,36 @@
+*********************************************************************** 00000102
+* DSSMPADP: ADD/REMOVE STATUS                                         * 00000202
+* OWNING SYSTEM: DSSM - DRIVER LICENCING SYSTEM                       * 00000302
+*********************************************************************** 00000402
+*                                                                     * 00000502
+* WHEN       WHO  CR #     WHAT                                       * 00000602
+* ---------- ---- -------- ------------------------------------------ * 00000702
+* 2010-05-21 MMC           IDEP PROJECT - ADD DR1SUSP, DR1FOTO        * 00000805
+* 1998-10-19 NKEM C980246  Y2K REMOVE E2 TP                           * 00000902
+*********************************************************************** 00001002
+*                                                                       00001102
+**   ALTERNATE PCBS                                                     00002002
+*                                                                       00003002
+       PCB     TYPE=TP,MODIFY=YES,EXPRESS=YES,PCBNAME=EXPCB             00004006
+       PCB     TYPE=TP,MODIFY=YES,PCBNAME=ALPCB                         00005006
+*                                                                       00006002
+**   DRIVER DATA BASE                                                   00007002
+*                                                                       00008002
+       PCB     TYPE=DB,DBDNAME=DSSMDDR1,PROCOPT=GP,KEYLEN=50,          +00008104
+               PCBNAME=DR1PCB                                           00008203
+       SENSEG  NAME=DR1MST,PARENT=0,PROCOPT=GRP                         00010002
+       SENSEG  NAME=DR1NAME,PARENT=DR1MST,PROCOPT=G                     00020002
+       SENSEG  NAME=DR1STAT,PARENT=DR1MST,PROCOPT=GID                   00030002
+       SENSEG  NAME=DR1SUSP,PARENT=DR1MST,PROCOPT=GIR                   00031002
+       SENSEG  NAME=DR1FOTO,PARENT=DR1MST,PROCOPT=GR                    00032005
+*                                                                       00040002
+*                                                                       00050002
+**   LINE DATA BASE                                                     00060002
+*                                                                       00070002
+       PCB     TYPE=DB,DBDNAME=DSSMDLN1,PROCOPT=GOT,KEYLEN=50,         +00080006
+               PCBNAME=LN1PCB                                           00081006
+       SENSEG  NAME=LN1DESC,PARENT=0                                    00090002
+       SENSEG  NAME=LN1EXTN,PARENT=LN1DESC                              00100002
+*                                                                       00110002
+       PSBGEN  LANG=PLI,PSBNAME=DSSMPADP,CMPAT=YES                      00120002
+       END                                                              00130002

@@ -1,0 +1,36 @@
+*     L I N E   D A T A   B A S E   -   P H Y S I C A L               * 00010002
+*********************************************************************** 00010000
+*  MM DD YY   DESCRIPTION                               CHANGED BY    * 00020000
+*  -- -- --   ---------------------------------------   ------------  * 00030000
+*  05 14 81   ORIGINAL CREATION                         B CLARK       * 00040000
+*             CHANGED BLOCKS FROM 10 TO 104             B CLARK       * 00040000
+*             CHANGED BLOCKSIZE FROM 16384 7548         B CLARK       * 00040000
+*********************************************************************** 00050000
+       DBD     NAME=DSSMDLN0,                                          X
+               ACCESS=(HDAM,OSAM),                                     X
+               RMNAME=(DFSHDC40,10,104)
+DSG1   DATASET DD1=DSSMDLNA,                                           X
+               SIZE=10240,                                             X
+               SCAN=3,                                                 X
+               DEVICE=3390
+       SEGM    NAME=LN0DESC,                LINE COMMON DESCRIPTION    X
+               PARENT=0,                                               X
+               BYTES=59,                                               X
+               RULES=(VVV)
+       FIELD   NAME=(DESCID,SEQ,U),                                    X
+               BYTES=10,START=1,TYPE=C
+       LCHILD  NAME=(TB0LINE,DSSMDTB0),                                X
+               PTR=SNGL,                                               X
+               PAIR=LN0MST
+       SEGM    NAME=LN0MST,                 LINE TABLE MASTER          X
+               PARENT=LN0DESC,                                         X
+               PTR=PAIRED,                                             X
+               SOURCE=((TB0LINE,DATA,DSSMDTB0))
+       SEGM    NAME=LN0EXTN,                LINE EXTENSION DESCRIPTION X
+               PARENT=LN0DESC,                                         X
+               BYTES=46
+       FIELD   NAME=(EXTNID,SEQ,U),                                    X
+               BYTES=1,START=1,TYPE=C
+       DBDGEN
+       FINISH
+       END

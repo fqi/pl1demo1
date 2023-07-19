@@ -1,0 +1,43 @@
+*  D R I V E R   D A T A   B A S E  -  DSSMDDR1  -  L O G I C A L     * 00010000
+*********************************************************************** 00050000
+*  MM DD YY   DESCRIPTION                               CHANGED BY    * 00020000
+*  -- -- --   ---------------------------------------   ------------  * 00030000
+*  03 23 83   NEW VERSION CREATE FOR RELEASE 9.0        B CLARK       * 00040000
+*  11 02 90   REMOVED DR1CONV SEGMENT                   B CLARK       * 00040000
+*********************************************************************** 00050000
+       DBD     NAME=DSSMDDR1,                                          X
+               ACCESS=LOGICAL
+       DATASET LOGICAL
+       SEGM    NAME=DR1MST,PARENT=0,                                   X
+               SOURCE=((DR0MST,DATA,DSSMDDR0))
+       SEGM    NAME=DR1NAME,PARENT=DR1MST,                             X
+               SOURCE=((DR0NAME,DATA,DSSMDDR0))
+       SEGM    NAME=DR1STAT,PARENT=DR1MST,                             X
+               SOURCE=((DR0STAT,DATA,DSSMDDR0))
+       SEGM    NAME=DR1FILM,PARENT=DR1MST,                             X
+               SOURCE=((DR0FILM,DATA,DSSMDDR0))
+       SEGM    NAME=DR1ADDR,PARENT=DR1MST,                             X
+               SOURCE=((DR0ADDR,DATA,DSSMDDR0))
+       SEGM    NAME=DR1SUSP,PARENT=DR1MST,                             X
+               SOURCE=((DR0SUSP,DATA,DSSMDDR0))
+       SEGM    NAME=DR1ACCD,PARENT=DR1MST,                             X
+               SOURCE=((DR0ACCD,DATA,DSSMDDR0))
+       SEGM    NAME=DR1CORR,PARENT=DR1MST,                             X
+               SOURCE=((DR0CORR,DATA,DSSMDDR0))
+       SEGM    NAME=DR1MEDN,PARENT=DR1MST,                             X
+               SOURCE=((DR0MEDN,DATA,DSSMDDR0))
+       SEGM    NAME=DR1MDOC,PARENT=DR1MEDN,                            X
+               SOURCE=((DR0MDOC,DATA,DSSMDDR0))
+       SEGM    NAME=DR1EXAM,PARENT=DR1MST,                             X
+               SOURCE=((DR0EXAM,DATA,DSSMDDR0))
+       SEGM    NAME=DR1FOTO,PARENT=DR1MST,                             X
+               SOURCE=((DR0FOTO,DATA,DSSMDDR0))
+       SEGM    NAME=DR1INST,PARENT=DR1MST,                             X
+               SOURCE=((DR0INST,DATA,DSSMDDR0))
+       SEGM    NAME=DR1DOCM,PARENT=DR1MST,                             X
+               SOURCE=((DR0DOCM,DATA,DSSMDDR0))
+       SEGM    NAME=DR1SRCH,PARENT=DR1MST,                             X
+               SOURCE=((DR0SRCH,DATA,DSSMDDR0))
+       DBDGEN
+       FINISH
+       END

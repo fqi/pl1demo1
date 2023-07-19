@@ -1,0 +1,21 @@
+*     L I N E   D A T A   B A S E   -   L O G I C A L                 * 00010002
+*********************************************************************** 00010000
+*  MM DD YY   DESCRIPTION                               CHANGED BY    * 00020000
+*  -- -- --   ---------------------------------------   ------------  * 00030000
+*  06 01 81   ORIGINAL CREATION                         B CLARK       * 00040000
+*********************************************************************** 00050000
+       DBD     NAME=DSSMDLN1,                                          X
+               ACCESS=LOGICAL
+       DATASET LOGICAL
+       SEGM    NAME=LN1DESC,                LINE COMMON DESCRIPTION    X
+               PARENT=0,                                               X
+               SOURCE=((LN0DESC,DATA,DSSMDLN0))
+       SEGM    NAME=LN1MST,                 LINE MASTER                X
+               PARENT=LN1DESC,                                         X
+               SOURCE=((LN0MST,DATA,DSSMDLN0),(TB0MST,DATA,DSSMDTB0))
+       SEGM    NAME=LN1EXTN,                LINE EXTENSION DESCRIPTION X
+               PARENT=LN1DESC,                                         X
+               SOURCE=((LN0EXTN,DATA,DSSMDLN0))
+       DBDGEN
+       FINISH
+       END
