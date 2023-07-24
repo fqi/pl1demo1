@@ -1,0 +1,184 @@
+         PRINT ON,NOGEN
+         SPACE 2
+*
+* DSSMODSP: DRIVERS DISPLAY SCREEN                                  *
+*********************************************************************
+*                                                                   *
+* WHEN    WHO  WHY   WHAT                                           *
+* ------- ---- ----- ---------------------------------------------- *
+* 98OCT09 NKEM 980246 Y2K - REMOVE KEY AND LIST SCREENS             *
+* 93JUN29 GTRO GMT001 YEAR 2000 EXPIRY/REVIEW DATES                 *
+* 90DEC18 THIC CR507 DRIVER'S SYSTEM CLEAN UP (ADD IMSR TO SCREEN)  *
+*********************************************************************
+DSSMODSP MSG   TYPE=OUTPUT,SOR=(DSODSP,IGNORE),OPT=1,NXT=DSOIDSP
+LPAGE1   LPAGE SOR=DPAGE1,COND=(OPGE,=,'01')
+         SEG
+         MFLD  (HDTE,DATE3)
+         MFLD  TRAN,LTH=09
+         MFLD  TROP,LTH=50
+         MFLD  PHAS,LTH=01
+         MFLD  PFKX,LTH=01
+         MFLD  (,SCA),LTH=02
+         MFLD  IMSR,LTH=4
+         MFLD  SMSG,LTH=79
+         MFLD  PFLIST,LTH=79
+OPGE     MFLD  OPGE,LTH=02
+         MFLD  LPGE,LTH=02
+         MFLD  LLIC,LTH=07
+**************** HCCP****************                                   MVCLMID
+         MFLD  CLNOHDR,LTH=09
+         MFLD  BCID,LTH=09
+         MFLD  BCTYPE,LTH=05
+         MFLD  PHN,LTH=10
+         MFLD  PHTYPE,LTH=05
+         MFLD  BCIDEXP,LTH=09
+         MFLD  PHNEXP,LTH=09
+*************************************
+         MFLD  LNUM,LTH=07
+         MFLD  MSCD,LTH=08
+         MFLD  FRNO,LTH=07
+         MFLD  STLI,LTH=15
+         MFLD  KEYW,LTH=22
+        DO     4
+         MFLD  NMAD,LTH=22
+        ENDDO
+         MFLD  BIDT,LTH=09
+         MFLD  SXCD,LTH=08
+         MFLD  RRDT,LTH=09
+         MFLD  ADCD,LTH=14
+         MFLD  ADDT,LTH=09
+         MFLD  LCLS,LTH=03
+         MFLD  LEDT,LTH=09
+         MFLD  LMDT,LTH=09
+         MFLD  RSCD,LTH=17
+        DO    10
+         MFLD  LINE,LTH=79
+        ENDDO
+         MFLD  LNUMTYP,LTH=05
+LPAGE2   LPAGE SOR=DPAGE2,COND=(OPGE,^,'01')
+         SEG
+         MFLD  (HDTE,DATE3)
+         MFLD  TRAN,LTH=09
+         MFLD  TROP,LTH=50
+         MFLD  PHAS,LTH=01
+         MFLD  PFKX,LTH=01
+         MFLD  (,SCA),LTH=02
+         MFLD  IMSR,LTH=4
+         MFLD  SMSG,LTH=79
+         MFLD  PFLIST,LTH=79
+OPGE     MFLD  OPGE,LTH=02
+         MFLD  LPGE,LTH=02
+         MFLD  LLIC,LTH=07
+        DO    18
+         MFLD  LINE,LTH=79
+        ENDDO
+         MSGEND
+*
+DSOIDSP  MSG   TYPE=INPUT,SOR=(DSODSP,IGNORE),OPT=1,NXT=DSSMODSP
+         LPAGE SOR=(DPAGE1,DPAGE2)
+         SEG
+         MFLD  TRAN,LTH=09
+         MFLD  TROP,LTH=50
+         MFLD  (PHAS,'1'),LTH=1
+         MFLD  PFKX,LTH=1
+         MFLD  CTRL,LTH=02,FILL=C'1'
+         MFLD  OPGE,LTH=02
+         MFLD  LPGE,LTH=02
+         MFLD  LLIC,LTH=07
+         MSGEND
+*
+DSODSP   FMT
+         DEV   TYPE=(3270,2),FEAT=IGNORE,SYSMSG=SMSG,                  X
+               PFK=(PFKX,'1','2','3','4','5','6','7','8','9','A','B','CX
+               ')
+         DIV   TYPE=INOUT
+DPAGE1   DPAGE CURSOR=((02,02))
+HDTE     DFLD  POS=(01,02),LTH=08,ATTR=(NUM,PROT)
+TRAN     DFLD  POS=(01,11),LTH=09,ATTR=(NUM,PROT,MOD,NODISP)
+         DFLD  'DRIVERS LICENCE DISPLAY',POS=(01,27)
+IMSR     DFLD  POS=(01,60),LTH=04,ATTR=(NUM,PROT)
+TROP     DFLD  POS=(02,02),LTH=50,ATTR=(MOD,HI)
+PHAS     DFLD  POS=(02,53),LTH=01,ATTR=(NUM,PROT,MOD,NODISP)
+CTRL     DFLD  POS=(02,57),LTH=02,ATTR=(NUM,PROT,MOD,NODISP)
+SMSG     DFLD  POS=(23,02),LTH=79,ATTR=(PROT,HI)
+PFLIST   DFLD  POS=(24,02),LTH=79,ATTR=(ALPHA,PROT,MOD)
+         DFLD  '--------------------------------------------------------
+               -----------------------',POS=(03,02)
+         DFLD  'SCREEN',POS=(01,71)
+LPGE     DFLD  POS=(01,68),LTH=02,ATTR=(PROT,MOD,NODISP)
+OPGE     DFLD  POS=(01,78),LTH=02,ATTR=(PROT,MOD)
+LLIC     DFLD  POS=(02,60),LTH=07,ATTR=(PROT,MOD,NODISP)
+*  *** LINE 3:COMMAND; LINE 4:SAVE AREA; LINE 23 SYS MSG ***
+*  ****** HCCP FILEDS START ******
+         DFLD  'CLIENT#',POS=(04,02)
+CLNOHDR  DFLD  POS=(04,10),LTH=09,ATTR=(NUM,PROT,HI)
+         DFLD  'BCID#',POS=(04,28)
+BCID     DFLD  POS=(04,36),LTH=09,ATTR=(NUM,PROT,HI)
+BCTYPE   DFLD  POS=(04,46),LTH=05,ATTR=(NUM,PROT,HI)
+         DFLD  'PHN#',POS=(04,55)
+PHN      DFLD  POS=(04,63),LTH=10,ATTR=(NUM,PROT,HI)
+PHTYPE   DFLD  POS=(04,74),LTH=05,ATTR=(NUM,PROT,HI)
+         DFLD  'EXPIRES',POS=(05,28)
+BCIDEXP  DFLD POS=(05,36),LTH=09,ATTR=(NUM,PROT,HI)
+         DFLD  'EXPIRES',POS=(05,55)
+PHNEXP   DFLD  POS=(05,63),LTH=09,ATTR=(NUM,PROT,HI)
+         DFLD  '--------------------------------------------------------
+               -----------------------',POS=(06,02)
+*  ****** HCCP FILEDS END ******
+         DFLD  'LICENCE',POS=(07,02)
+         DFLD  'STATUS',POS=(07,29)
+         DFLD  'FILE REF',POS=(07,57)
+         DFLD  'TYPE',POS=(08,05)
+         DFLD  'KEYWORD',POS=(08,28)
+         DFLD  'SEX',POS=(08,62)
+LNUM     DFLD  POS=(07,10),LTH=07,ATTR=(PROT,HI)
+LNUMTYP  DFLD  POS=(07,18),LTH=05,ATTR=(PROT,HI)
+MSCD     DFLD  POS=(07,36),LTH=08,ATTR=(PROT,HI)
+FRNO     DFLD  POS=(07,66),LTH=07,ATTR=(PROT,HI)
+STLI     DFLD  POS=(08,10),LTH=15,ATTR=(PROT,HI)
+KEYW     DFLD  POS=(08,36),LTH=22,ATTR=(PROT,HI)
+SXCD     DFLD  POS=(08,66),LTH=08,ATTR=(PROT,HI)
+        DO     4
+NMAD     DFLD  POS=(09,02),LTH=22,ATTR=(PROT)
+        ENDDO
+         DFLD  'BIRTHDATE',POS=(09,26)
+         DFLD  'ADDRESS SRCE',POS=(09,53)
+         DFLD  'ADDRESS DATE',POS=(10,53)
+         DFLD  'EXPIRY DT',POS=(10,26)
+         DFLD  'LAST EXAM DT',POS=(11,53)
+         DFLD  '    CLASS',POS=(11,26)
+         DFLD  'LAST MED DT',POS=(12,54)
+         DFLD  ' RESTRICT',POS=(12,26)
+BIDT     DFLD  POS=(09,36),LTH=09,ATTR=(PROT,HI)
+ADCD     DFLD  POS=(09,66),LTH=14,ATTR=(PROT,HI)
+ADDT     DFLD  POS=(10,66),LTH=09,ATTR=(PROT,HI)
+RRDT     DFLD  POS=(10,36),LTH=09,ATTR=(PROT,HI)
+LEDT     DFLD  POS=(11,66),LTH=09,ATTR=(PROT,HI)
+LCLS     DFLD  POS=(11,36),LTH=03,ATTR=(PROT,HI)
+LMDT     DFLD  POS=(12,66),LTH=09,ATTR=(PROT,HI)
+RSCD     DFLD  POS=(12,36),LTH=17,ATTR=(PROT,HI)
+        DO    10
+LINE     DFLD  POS=(13,02),LTH=79,ATTR=(PROT)
+        ENDDO
+*
+DPAGE2   DPAGE CURSOR=((02,02))
+HDTE     DFLD  POS=(01,02),LTH=08,ATTR=(NUM,PROT)
+TRAN     DFLD  POS=(01,11),LTH=09,ATTR=(NUM,PROT,MOD,NODISP)
+         DFLD  'DRIVERS LICENCE DISPLAY',POS=(01,27)
+IMSR     DFLD  POS=(01,60),LTH=04,ATTR=(NUM,PROT)
+TROP     DFLD  POS=(02,02),LTH=50,ATTR=(MOD,HI)
+PHAS     DFLD  POS=(02,53),LTH=01,ATTR=(NUM,PROT,MOD,NODISP)
+CTRL     DFLD  POS=(02,57),LTH=02,ATTR=(NUM,PROT,MOD,NODISP)
+SMSG     DFLD  POS=(23,02),LTH=79,ATTR=(PROT,HI)
+PFLIST   DFLD  POS=(24,02),LTH=79,ATTR=(ALPHA,PROT,MOD)
+         DFLD  '--------------------------------------------------------
+               -----------------------',POS=(03,02)
+         DFLD  'SCREEN',POS=(01,71)
+LPGE     DFLD  POS=(01,68),LTH=02,ATTR=(PROT,MOD,NODISP)
+OPGE     DFLD  POS=(01,78),LTH=02,ATTR=(PROT,MOD)
+LLIC     DFLD  POS=(02,60),LTH=07,ATTR=(PROT,MOD,NODISP)
+        DO    18
+LINE     DFLD  POS=(05,02),LTH=79,ATTR=(PROT)
+        ENDDO
+         FMTEND
+         END
